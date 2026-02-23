@@ -118,7 +118,7 @@ export function getBackendDisplayUrl() {
 // Получаем начальный baseURL
 const API_URL = getApiBaseUrl();
 
-// BASE_URL для формирования полных URL изображений (только из backendApiUrl, без дефолта)
+// Базовый URL бэкенда (без /api) — для картинок подставляется при каждом вызове getImageUrl
 function getBaseUrl() {
   const apiUrl = getApiBaseUrl();
   if (apiUrl.startsWith('http')) {
@@ -127,13 +127,14 @@ function getBaseUrl() {
   return '';
 }
 
-const BASE_URL = getBaseUrl();
-
-// Хелпер для получения полного URL изображения
+// Хелпер для получения полного URL изображения: спереди подставляется путь до бэка
 export const getImageUrl = (path) => {
   if (!path) return '/placeholder.jpg';
   if (path.startsWith('http')) return path;
-  return `${BASE_URL}${path}`;
+  const base = getBaseUrl();
+  if (!base) return path;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base.replace(/\/+$/, '')}${normalizedPath}`;
 };
 
 const api = axios.create({
