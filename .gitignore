@@ -23,6 +23,9 @@ yarn-error.log*
 .env*.local
 .env
 
+# Public config (backend URL etc.)
+public/config.json
+
 # Vercel
 .vercel
 
