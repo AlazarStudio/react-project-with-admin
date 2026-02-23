@@ -99,11 +99,11 @@ function getBackendUrlFromConfig() {
   return null
 }
 
-// Определяем target для прокси
+// Только backendApiUrl из config (или VITE_BACKEND_URL). Без дефолта на localhost:5000.
 const backendUrlFromConfig = getBackendUrlFromConfig()
-const proxyTarget = backendUrlFromConfig || process.env.VITE_BACKEND_URL || 'http://localhost:5000'
+const proxyTarget = backendUrlFromConfig || process.env.VITE_BACKEND_URL || null
 
-console.log('🔧 Прокси настроен на:', proxyTarget)
+console.log('🔧 Прокси настроен на:', proxyTarget ?? '(не задан — укажите backendApiUrl в config.json или VITE_BACKEND_URL)')
 
 export default defineConfig({
   plugins: [react(), updateConfigPlugin()],
@@ -114,17 +114,16 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    proxy: {
+    proxy: proxyTarget ? {
       '/api': {
         target: proxyTarget,
         changeOrigin: true,
-        // Не переписываем путь, оставляем /api
       },
       '/uploads': {
         target: proxyTarget,
         changeOrigin: true,
       },
-    },
+    } : {},
     // Middleware для обработки POST запросов к update-config.php в dev режиме
     middlewareMode: false,
   },

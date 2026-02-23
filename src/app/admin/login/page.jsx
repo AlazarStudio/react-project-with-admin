@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { updateApiBaseUrl, configAPI } from '@/lib/api'
+import { updateApiBaseUrl, configAPI, getBackendDisplayUrl, menuAPI } from '@/lib/api'
 import styles from './login.module.css'
 
 export default function AdminLoginPage() {
@@ -21,35 +21,11 @@ export default function AdminLoginPage() {
   const [backendUrlSaving, setBackendUrlSaving] = useState(false)
   const [backendUrlError, setBackendUrlError] = useState('')
   
-  // Проверяем, есть ли конфиг при загрузке страницы
+  // Показываем форму ввода URL бэкенда только если backendApiUrl не задан (единственный источник — config.json / настройки)
   useEffect(() => {
-    const checkConfig = async () => {
-      // Проверяем дефолтный URL из env
-      const envUrl = import.meta.env.VITE_API_URL
-      if (envUrl && envUrl.trim() && !envUrl.startsWith('/')) {
-        return // Есть полный URL в env, показываем форму логина
-      }
-      
-      // Пробуем загрузить конфиг с бэка
-      try {
-        const axios = (await import('axios')).default
-        const testAxios = axios.create({
-          baseURL: '/api',
-          timeout: 3000,
-        })
-        const response = await testAxios.get('/config')
-        if (response.data?.backendApiUrl) {
-          return // Конфиг есть, показываем форму логина
-        }
-      } catch (e) {
-        // Если не удалось загрузить конфиг - показываем форму ввода URL
-      }
-      
-      // Если конфига нет - показываем форму ввода URL
+    if (!getBackendDisplayUrl()?.trim()) {
       setShowBackendUrlForm(true)
     }
-    
-    checkConfig()
   }, [])
 
   const handleChange = (e) => {
@@ -216,9 +192,36 @@ export default function AdminLoginPage() {
         setIsLoading(false)
         return
       }
-      
-      // Редиректим в админку
-      navigate(returnUrl, { replace: true })
+
+      // Редирект: если целевой URL — просто /admin, ведём на первый пункт меню или в настройки
+      let targetUrl = returnUrl
+      if (!returnUrl || returnUrl === '/admin') {
+        try {
+          const menuRes = await menuAPI.get()
+          const items = (menuRes.data?.items || [])
+            .filter(
+              (item) =>
+                item.isVisible !== false &&
+                item.url &&
+                item.url.startsWith('/admin') &&
+                item.url !== '/admin/settings'
+            )
+            .sort((a, b) => (a.order || 0) - (b.order || 0))
+          const first = items[0]
+          if (first) {
+            const slug = (first.url || '').replace(/^\/admin\/?/, '').replace(/\/$/, '')
+            targetUrl =
+              slug && slug !== 'settings'
+                ? `/admin/dynamic/${slug}`
+                : '/admin/settings'
+          } else {
+            targetUrl = '/admin/settings'
+          }
+        } catch (_) {
+          targetUrl = '/admin/settings'
+        }
+      }
+      navigate(targetUrl, { replace: true })
     } catch (err) {
       console.error('Ошибка входа:', err)
       console.error('Детали ошибки:', {
@@ -325,22 +328,6 @@ export default function AdminLoginPage() {
           </div>
           <button type="submit" className={styles.submitBtn} disabled={isLoading}>
             {isLoading ? 'Вход...' : 'Войти'}
-          </button>
-          <button 
-            type="button" 
-            onClick={() => setShowBackendUrlForm(true)}
-            style={{
-              marginTop: '12px',
-              padding: '8px 16px',
-              fontSize: '0.875rem',
-              color: '#64748b',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            Изменить URL backend
           </button>
         </form>
       </div>

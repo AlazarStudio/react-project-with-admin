@@ -364,7 +364,8 @@ export default function AdminSettingsPage() {
       try {
         const configRes = await configAPI.get();
         const savedUrl = configRes.data?.backendApiUrl || '';
-        const envUrl = import.meta.env.VITE_API_URL || '';
+        const envRaw = import.meta.env.VITE_API_URL;
+        const envUrl = (envRaw && typeof envRaw === 'string' && envRaw.startsWith('http')) ? envRaw.replace(/\/api\/?$/, '') : '';
         const urlToUse = savedUrl || envUrl;
         setBackendUrl(urlToUse);
         
@@ -373,8 +374,8 @@ export default function AdminSettingsPage() {
           setActiveTab('backend');
         }
       } catch (error) {
-        // Если не удалось загрузить через защищенный endpoint, используем env
-        const envUrl = import.meta.env.VITE_API_URL || '';
+        const envRaw = import.meta.env.VITE_API_URL;
+        const envUrl = (envRaw && typeof envRaw === 'string' && envRaw.startsWith('http')) ? envRaw.replace(/\/api\/?$/, '') : '';
         setBackendUrl(envUrl);
         
         // Если и env пустой - переключаемся на вкладку подключения

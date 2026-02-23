@@ -19,7 +19,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { dynamicPageRecordsAPI, menuAPI, getImageUrl } from '@/lib/api';
+import { dynamicPageRecordsAPI, menuAPI, getImageUrl, getBackendDisplayUrl } from '@/lib/api';
 import { getMuiIconComponent } from './components/WhatToBringIcons';
 import styles from './admin.module.css';
 
@@ -213,6 +213,9 @@ export default function AdminLayout() {
   }, []);
 
   const getDocsForCurrentPage = () => {
+    const backendBase = getBackendDisplayUrl();
+    const docBase = backendBase ? `${backendBase}/api` : 'URL_ИЗ_НАСТРОЕК/api';
+
     const buildDoc = ({ title, description, endpoint, resourcePath, resourceLabel, notes }) => ({
       title,
       description,
@@ -225,10 +228,10 @@ export default function AdminLayout() {
     const defaultDoc = {
       title: 'Как получать данные на фронте',
       description: 'Готовый пример для отдельного проекта: установили axios, вставили код, подставили URL бэкенда и получили данные.',
-      endpoint: 'http://localhost:5000/api/<resource>',
+      endpoint: `${docBase}/<resource>`,
       readExample: `import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = '${backendBase || 'http://your-backend'}'; // только из настроек (Настройки → URL бэкенда)
 const api = axios.create({
   baseURL: \`\${BACKEND_URL}/api\`,
   timeout: 10000,
@@ -245,9 +248,9 @@ export async function getResourceById(id) {
 }`,
       notes: [
         'Это пример для любого отдельного проекта, не привязан к админке.',
-        'Нужно только заменить `BACKEND_URL` на ваш адрес API-сервера.',
-        'Список: GET http://localhost:5000/api/<resource>',
-        'Одна запись: GET http://localhost:5000/api/<resource>/:id',
+        'URL бэкенда задаётся только в Настройках (backendApiUrl), без дефолтов.',
+        `Список: GET ${docBase}/<resource>`,
+        `Одна запись: GET ${docBase}/<resource>/:id`,
       ],
     };
 
@@ -259,12 +262,12 @@ export async function getResourceById(id) {
       return buildDoc({
         title: `Документация для "${pageLabel}"`,
         description: `Готовые примеры для отдельного проекта: с Authorization, с полным URL, для списка и одной записи.`,
-        endpoint: `http://localhost:5000/api/${resourceRoute}`,
+        endpoint: `${docBase}/${resourceRoute}`,
         resourcePath: resourceRoute,
         resourceLabel: pageLabel,
         notes: [
-          `Список "${pageLabel}": GET http://localhost:5000/api/${resourceRoute}`,
-          `Одна запись "${pageLabel}": GET http://localhost:5000/api/${resourceRoute}/:id`,
+          `Список "${pageLabel}": GET ${docBase}/${resourceRoute}`,
+          `Одна запись "${pageLabel}": GET ${docBase}/${resourceRoute}/:id`,
           'Вставьте ваш JWT-токен в AUTH_TOKEN.',
           'Для endpoints без авторизации уберите заголовок Authorization.',
         ],
@@ -275,12 +278,12 @@ export async function getResourceById(id) {
       return buildDoc({
         title: 'Документация: Настройки',
         description: 'Полностью автономные примеры для отдельного проекта.',
-        endpoint: 'http://localhost:5000/api/menu',
+        endpoint: `${docBase}/menu`,
         resourcePath: 'menu',
         resourceLabel: 'пунктов меню',
         notes: [
-          'Список меню: GET http://localhost:5000/api/menu',
-          'Конфиг: GET http://localhost:5000/api/config',
+          `Список меню: GET ${docBase}/menu`,
+          `Конфиг: GET ${docBase}/config`,
           'Вынесите axios-клиент в отдельный модуль (api.js).',
           'Этот шаблон подходит для любого вашего endpoint.',
         ],
@@ -297,9 +300,10 @@ export async function getResourceById(id) {
   const docs = getDocsForCurrentPage();
   const docsResourceFn = docs.resourcePath.charAt(0).toUpperCase() + docs.resourcePath.slice(1);
   const installSnippet = `npm i axios`;
+  const backendForSnippet = getBackendDisplayUrl() || 'http://your-backend';
   const baseClientSnippet = `import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = '${backendForSnippet}'; // только из настроек (config.json → backendApiUrl)
 const AUTH_TOKEN = 'PASTE_JWT_TOKEN_HERE'; // если endpoint публичный — удалите Authorization
 
 export const api = axios.create({
@@ -332,7 +336,7 @@ export async function get${docsResourceFn}ById(id) {
 }`;
   const fullExampleSnippet = `import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = '${backendForSnippet}'; // только из настроек
 const AUTH_TOKEN = 'PASTE_JWT_TOKEN_HERE';
 
 const api = axios.create({

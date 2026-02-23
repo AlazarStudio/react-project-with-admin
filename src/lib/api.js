@@ -4,15 +4,16 @@ import axios from 'axios';
 let cachedBackendUrl = null;
 
 // Функция для получения базового URL API
-// Приоритет: кэш > VITE_API_URL > прокси (/api)
+// Единственный источник: backendApiUrl из config (кэш) или полный VITE_API_URL в env. Без fallback на /api.
 function getApiBaseUrl() {
-  // Если уже загрузили конфиг - используем его
   if (cachedBackendUrl) {
     return cachedBackendUrl.endsWith('/api') ? cachedBackendUrl : `${cachedBackendUrl}/api`;
   }
-  
-  // Используем VITE_API_URL или прокси
-  return import.meta.env.VITE_API_URL || '/api';
+  const env = import.meta.env.VITE_API_URL;
+  if (env && typeof env === 'string' && env.startsWith('http')) {
+    return env.endsWith('/api') ? env : `${env.replace(/\/+$/, '')}/api`;
+  }
+  return '';
 }
 
 // Функция для загрузки публичного конфига (вызывается при старте приложения)
@@ -42,59 +43,57 @@ export async function loadPublicConfig() {
         console.log('⚠️ config.json пустой или содержит пустую строку');
       }
     } catch (configFileError) {
-      // Если файл не найден, пробуем через API endpoint
-      console.log('config.json не найден, пробуем через API endpoint');
+      console.log('config.json не найден');
     }
-    
-    // Если config.json не найден, пробуем загрузить через API endpoint /api/config
-    // Используем дефолтный URL для этого запроса
-    let baseUrl = import.meta.env.VITE_API_URL || '/api';
-    if (baseUrl.startsWith('/')) {
-      // Относительный путь - используем текущий домен (работает если фронт и бэк на одном домене)
-      baseUrl = `${window.location.origin}${baseUrl}`;
-    }
-    
-    const publicConfigApi = axios.create({
-      baseURL: baseUrl,
-      timeout: 3000,
-    });
-    
-    const response = await publicConfigApi.get('/config');
-    const backendApiUrl = response.data?.backendApiUrl;
-    console.log('📡 Загружен конфиг через API:', { backendApiUrl });
-    
-    if (backendApiUrl && backendApiUrl.trim()) {
-      const url = backendApiUrl.trim();
-      cachedBackendUrl = url;
-      const apiUrl = url.endsWith('/api') ? url : `${url}/api`;
-      api.defaults.baseURL = apiUrl;
-      console.log('✅ Применен URL из API:', apiUrl);
-      return url;
+
+    // Пробуем /api/config только если в env задан полный URL бэкенда (не используем /api)
+    const envUrl = import.meta.env.VITE_API_URL;
+    if (envUrl && typeof envUrl === 'string' && envUrl.startsWith('http')) {
+      const baseUrl = envUrl.replace(/\/api\/?$/, '');
+      try {
+        const publicConfigApi = axios.create({
+          baseURL: baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`,
+          timeout: 3000,
+        });
+        const response = await publicConfigApi.get('/config');
+        const backendApiUrl = response.data?.backendApiUrl;
+        if (backendApiUrl && backendApiUrl.trim()) {
+          const url = backendApiUrl.trim();
+          cachedBackendUrl = url;
+          const apiUrl = url.endsWith('/api') ? url : `${url}/api`;
+          api.defaults.baseURL = apiUrl;
+          console.log('✅ Применен URL из API:', apiUrl);
+          return url;
+        }
+      } catch (e) {
+        console.log('Не удалось загрузить конфиг через API');
+      }
     }
   } catch (error) {
-    // Если не удалось загрузить конфиг - используем дефолтный URL
-    console.log('Не удалось загрузить конфиг, используем дефолтный URL');
+    console.log('Не удалось загрузить конфиг:', error?.message);
   }
-  
-  // Если конфиг не загрузился - используем дефолтный URL из env (если он полный)
+
   const defaultUrl = import.meta.env.VITE_API_URL;
-  if (defaultUrl && defaultUrl.startsWith('http')) {
-    cachedBackendUrl = defaultUrl.replace('/api', '');
-    api.defaults.baseURL = defaultUrl;
+  if (defaultUrl && typeof defaultUrl === 'string' && defaultUrl.startsWith('http')) {
+    cachedBackendUrl = defaultUrl.replace(/\/api\/?$/, '');
+    api.defaults.baseURL = defaultUrl.endsWith('/api') ? defaultUrl : `${defaultUrl.replace(/\/+$/, '')}/api`;
     return cachedBackendUrl;
   }
-  
-  // Если дефолтного URL нет или он относительный - возвращаем null
-  // На странице логина будет показана форма ввода URL
+
+  // Нет backendApiUrl — запросы к бэку не должны уходить
+  cachedBackendUrl = null;
+  api.defaults.baseURL = '';
   return null;
 }
 
 // Функция для обновления baseURL (вызывается при сохранении URL в настройках)
 export function updateApiBaseUrl(backendUrl) {
   if (!backendUrl || !backendUrl.trim()) {
-    // Если URL пустой, используем дефолтный
     cachedBackendUrl = null;
-    api.defaults.baseURL = import.meta.env.VITE_API_URL || '/api';
+    const env = import.meta.env.VITE_API_URL;
+    api.defaults.baseURL = (env && typeof env === 'string' && env.startsWith('http'))
+      ? (env.endsWith('/api') ? env : `${env.replace(/\/+$/, '')}/api`)
+      : '';
     return;
   }
   
@@ -108,16 +107,24 @@ export function updateApiBaseUrl(backendUrl) {
   console.log('🔧 updateApiBaseUrl: обновлен api.defaults.baseURL:', apiUrl);
 }
 
+// Для отображения в UI (документация и т.д.) — только backendApiUrl, без дефолта
+export function getBackendDisplayUrl() {
+  if (cachedBackendUrl) return cachedBackendUrl;
+  const u = getApiBaseUrl();
+  if (u.startsWith('http')) return u.replace(/\/api\/?$/, '');
+  return '';
+}
+
 // Получаем начальный baseURL
 const API_URL = getApiBaseUrl();
 
-// BASE_URL для формирования полных URL изображений
+// BASE_URL для формирования полных URL изображений (только из backendApiUrl, без дефолта)
 function getBaseUrl() {
   const apiUrl = getApiBaseUrl();
   if (apiUrl.startsWith('http')) {
-    return apiUrl.replace('/api', '');
+    return apiUrl.replace(/\/api\/?$/, '');
   }
-  return import.meta.env.DEV ? 'http://localhost:5000' : '';
+  return '';
 }
 
 const BASE_URL = getBaseUrl();
