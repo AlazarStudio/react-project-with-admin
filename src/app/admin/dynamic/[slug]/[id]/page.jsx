@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useContext, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, X as XIcon } from 'lucide-react';
 import { dynamicPagesAPI, dynamicPageRecordsAPI, menuAPI, mediaAPI, structureAPI, getImageUrl } from '@/lib/api';
@@ -8,6 +9,7 @@ import { AdminHeaderRightContext, AdminBreadcrumbContext } from '../../../layout
 import { BLOCK_TYPES, createEmptyBlock, slugFromText } from '../../../components/NewsBlockEditor';
 import { ConfirmModal } from '../../../components';
 import NewsBlockEditor from '../../../components/NewsBlockEditor';
+import { MUI_ICON_NAMES, MUI_ICONS, getMuiIconComponent, getIconGroups } from '../../../components/WhatToBringIcons';
 import RichTextEditor from '@/components/RichTextEditor';
 import styles from '../../../admin.module.css';
 
@@ -69,6 +71,8 @@ export default function DynamicRecordEditPage() {
   const [pulseAdditionalBlockIds, setPulseAdditionalBlockIds] = useState([]);
   const [scrollToAdditionalBlockId, setScrollToAdditionalBlockId] = useState(null);
   const [additionalScrollRequestId, setAdditionalScrollRequestId] = useState(0);
+  const [contactIconPicker, setContactIconPicker] = useState({ open: false, fieldKey: null, search: '', group: 'all' });
+  const [uploadingContactFieldKey, setUploadingContactFieldKey] = useState(null);
   const setHeaderRight = useContext(AdminHeaderRightContext)?.setHeaderRight;
   const setBreadcrumbLabel = useContext(AdminBreadcrumbContext)?.setBreadcrumbLabel;
 
@@ -323,6 +327,34 @@ export default function DynamicRecordEditPage() {
     handleFieldChange(fieldKey, { type: 'file', value: file, preview: URL.createObjectURL(file) });
   };
 
+  const handleContactIconUpload = async (fieldKey, file) => {
+    if (!file) return;
+    setUploadingContactFieldKey(fieldKey);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await mediaAPI.upload(formData);
+      const uploadedUrl = res.data?.url || '';
+      const currentValue = recordData[fieldKey];
+      const normalizedValue = (typeof currentValue === 'object' && currentValue !== null)
+        ? currentValue
+        : { value: typeof currentValue === 'string' ? currentValue : '' };
+      handleFieldChange(fieldKey, {
+        ...normalizedValue,
+        icon: uploadedUrl,
+        iconType: 'upload',
+      });
+    } catch (error) {
+      console.error('Ошибка загрузки иконки контакта:', error);
+      setInfoModal({
+        title: 'Ошибка загрузки',
+        message: 'Не удалось загрузить иконку контакта.',
+      });
+    } finally {
+      setUploadingContactFieldKey(null);
+    }
+  };
+
   const handleGalleryUpload = async (fieldKey, files) => {
     try {
       const uploadPromises = Array.from(files).map(file => {
@@ -445,11 +477,41 @@ export default function DynamicRecordEditPage() {
       switch (field.type) {
         case 'heading':
           return typeof value.text === 'string' ? value.text : '';
+        case 'url':
+        case 'contact':
+        case 'date':
+        case 'datetime':
+        case 'number':
+          if (field.type === 'contact') {
+            return JSON.stringify({
+              value: typeof value.value === 'string' ? value.value : '',
+              icon: typeof value.icon === 'string' ? value.icon : '',
+              iconType: value.iconType === 'upload' ? 'upload' : 'library',
+            });
+          }
+          return typeof value.value === 'string' || typeof value.value === 'number' ? value.value : '';
+        case 'boolean':
+          return typeof value.value === 'boolean' ? value.value : Boolean(value.value);
         case 'text':
         case 'quote':
           return typeof value.content === 'string' ? value.content : '';
         case 'video':
+        case 'audio':
           return typeof value.url === 'string' ? value.url : '';
+        case 'document':
+        case 'file':
+          if (typeof value.url === 'string') return value.url;
+          return '';
+        case 'multiselect':
+          if (Array.isArray(value.values)) return JSON.stringify(value.values);
+          return '';
+        case 'json':
+          if (typeof value.value === 'string') return value.value;
+          return JSON.stringify(value.value ?? {});
+        case 'table':
+        case 'accordion':
+        case 'tabs':
+          return JSON.stringify(value);
         case 'list':
           if (Array.isArray(value.items)) return JSON.stringify(value.items);
           return '';
@@ -478,6 +540,15 @@ export default function DynamicRecordEditPage() {
     switch (fieldType) {
       case 'heading':
         return asPlainText(value.text).length > 0;
+      case 'url':
+      case 'date':
+      case 'datetime':
+      case 'number':
+        return asPlainText(value.value).length > 0;
+      case 'contact':
+        return asPlainText(value.value).length > 0;
+      case 'boolean':
+        return typeof value.value === 'boolean' || asPlainText(value.value).length > 0;
       case 'text':
       case 'quote':
         return asPlainText(value.content).length > 0;
@@ -490,7 +561,14 @@ export default function DynamicRecordEditPage() {
       case 'video':
       case 'audio':
       case 'document':
+      case 'file':
         return asPlainText(value.url).length > 0;
+      case 'multiselect': {
+        const values = Array.isArray(value.values) ? value.values : [];
+        return values.some((item) => asPlainText(item).length > 0);
+      }
+      case 'json':
+        return asPlainText(value.value).length > 0;
       case 'list': {
         const items = Array.isArray(value.items) ? value.items : [];
         return items.some((item) => asPlainText(item).length > 0);
@@ -749,6 +827,148 @@ export default function DynamicRecordEditPage() {
           </div>
         );
 
+      case 'url':
+      case 'date':
+      case 'datetime':
+      case 'number': {
+        const inputTypeByField = {
+          url: 'url',
+          date: 'date',
+          datetime: 'datetime-local',
+          number: 'number',
+        };
+        const inputValue = typeof value === 'object' && value !== null
+          ? (value.value ?? '')
+          : (value ?? '');
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            <input
+              type={inputTypeByField[fieldType]}
+              value={inputValue}
+              onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
+              className={styles.blockInput}
+              placeholder={`Введите ${label.toLowerCase()}`}
+            />
+          </div>
+        );
+      }
+
+      case 'contact': {
+        let parsedValue = value;
+        if (typeof value === 'string') {
+          try {
+            parsedValue = JSON.parse(value);
+          } catch (_) {
+            parsedValue = { value, icon: '', iconType: 'library' };
+          }
+        }
+        const normalizedContact = (parsedValue && typeof parsedValue === 'object')
+          ? {
+            value: parsedValue.value ?? '',
+            icon: parsedValue.icon ?? '',
+            iconType: parsedValue.iconType === 'upload' ? 'upload' : 'library',
+          }
+          : { value: '', icon: '', iconType: 'library' };
+        const previewIcon = normalizedContact.iconType === 'library'
+          ? getMuiIconComponent(normalizedContact.icon)
+          : null;
+        const PreviewIcon = previewIcon;
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            <div className={styles.whatToBringBlock} style={{ margin: 0 }}>
+              <div className={styles.whatToBringIconCell}>
+                <div className={styles.whatToBringTypeSwitcher} role="group" aria-label="Источник иконки">
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange(fieldKey, { ...normalizedContact, iconType: 'upload', icon: '' })}
+                  className={`${styles.whatToBringTypeSegment} ${normalizedContact.iconType === 'upload' ? styles.whatToBringTypeSegmentActive : ''}`}
+                >
+                  Загрузить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange(fieldKey, { ...normalizedContact, iconType: 'library', icon: '' })}
+                  className={`${styles.whatToBringTypeSegment} ${normalizedContact.iconType === 'library' ? styles.whatToBringTypeSegmentActive : ''}`}
+                >
+                  Библиотека
+                </button>
+                </div>
+                <div className={styles.whatToBringIconPreview}>
+                  {normalizedContact.iconType === 'upload' ? (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        id={`field-contact-icon-${fieldKey}`}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            await handleContactIconUpload(fieldKey, file);
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                      <label
+                        htmlFor={`field-contact-icon-${fieldKey}`}
+                        className={styles.whatToBringUploadBtn}
+                        title="Загрузить иконку"
+                      >
+                        {normalizedContact.icon ? (
+                          <img src={getImageUrl(normalizedContact.icon)} alt="" className={styles.whatToBringUploadImg} />
+                        ) : (
+                          <span className={styles.whatToBringMuiPlaceholder}>Иконка</span>
+                        )}
+                      </label>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setContactIconPicker({ open: true, fieldKey, search: '', group: 'all' })}
+                      className={styles.whatToBringMuiBtn}
+                      title="Выбрать иконку"
+                      aria-label="Выбрать иконку"
+                    >
+                      {PreviewIcon ? <PreviewIcon size={22} /> : (
+                        <span className={styles.whatToBringMuiPlaceholder}>Иконка</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input
+                type="text"
+                value={normalizedContact.value}
+                onChange={(e) => handleFieldChange(fieldKey, { ...normalizedContact, value: e.target.value })}
+                className={styles.whatToBringTextInput}
+                placeholder="Email, телефон, ссылка или другой контакт"
+              />
+            </div>
+            {uploadingContactFieldKey === fieldKey && (
+              <div className={styles.formHint} style={{ marginBottom: 8 }}>Загрузка иконки...</div>
+            )}
+          </div>
+        );
+      }
+
+      case 'boolean':
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            <label className={styles.visibilityToggle}>
+              <input
+                type="checkbox"
+                checked={typeof value === 'object' && value !== null ? Boolean(value.value) : Boolean(value)}
+                onChange={(e) => handleFieldChange(fieldKey, e.target.checked)}
+              />
+              <span className={styles.visibilitySwitch} />
+              <span className={styles.visibilityLabel}>{(typeof value === 'object' && value !== null ? Boolean(value.value) : Boolean(value)) ? 'Да' : 'Нет'}</span>
+            </label>
+          </div>
+        );
+
       case 'text':
         return (
           <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
@@ -869,6 +1089,9 @@ export default function DynamicRecordEditPage() {
         );
 
       case 'video':
+      case 'audio':
+      case 'document':
+      case 'file':
         return (
           <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
             <label className={styles.blockLabel}>{label}</label>
@@ -877,10 +1100,56 @@ export default function DynamicRecordEditPage() {
               value={typeof value === 'object' && value?.url ? value.url : (typeof value === 'string' ? value : '')}
               onChange={(e) => handleFieldChange(fieldKey, { url: e.target.value })}
               className={styles.blockInput}
-              placeholder="URL видео VK"
+              placeholder="Введите URL"
             />
           </div>
         );
+
+      case 'multiselect': {
+        const selectedValues = Array.isArray(value?.values)
+          ? value.values
+          : (Array.isArray(value) ? value : []);
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            {selectedValues.map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                  type="text"
+                  value={item}
+                  onChange={(e) => {
+                    const newValues = [...selectedValues];
+                    newValues[i] = e.target.value;
+                    handleFieldChange(fieldKey, { values: newValues });
+                  }}
+                  className={styles.blockInput}
+                  placeholder={`Значение ${i + 1}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newValues = selectedValues.filter((_, idx) => idx !== i);
+                    handleFieldChange(fieldKey, { values: newValues });
+                  }}
+                  className={styles.removeBtn}
+                >
+                  <XIcon size={14} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                handleFieldChange(fieldKey, { values: [...selectedValues, ''] });
+              }}
+              className={styles.addBtn}
+              style={{ marginTop: '8px' }}
+            >
+              Добавить значение
+            </button>
+          </div>
+        );
+      }
 
       case 'list':
         const listItems = Array.isArray(value?.items) ? value.items : [];
@@ -924,6 +1193,24 @@ export default function DynamicRecordEditPage() {
                 Добавить элемент
               </button>
             </div>
+          </div>
+        );
+
+      case 'table':
+      case 'accordion':
+      case 'tabs':
+      case 'json':
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            <textarea
+              value={typeof value === 'string' ? value : JSON.stringify(value ?? {}, null, 2)}
+              onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
+              className={styles.blockInput}
+              rows={8}
+              style={{ fontFamily: 'monospace', resize: 'vertical' }}
+              placeholder="Введите JSON"
+            />
           </div>
         );
 
@@ -974,6 +1261,101 @@ export default function DynamicRecordEditPage() {
           />
         </div>
       </div>
+
+      {contactIconPicker.open && typeof document !== 'undefined' && createPortal(
+        <div
+          className={styles.modalOverlay}
+          style={{ zIndex: 10000 }}
+          onClick={(e) => e.target === e.currentTarget && setContactIconPicker({ open: false, fieldKey: null, search: '', group: 'all' })}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Выбор иконки контакта"
+        >
+          <div
+            className={styles.modalDialog}
+            style={{ maxWidth: 420 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Выберите иконку</h3>
+              <button
+                type="button"
+                onClick={() => setContactIconPicker({ open: false, fieldKey: null, search: '', group: 'all' })}
+                className={styles.modalClose}
+              >
+                <XIcon size={20} />
+              </button>
+            </div>
+            <div className={styles.modalBody} style={{ maxHeight: 440, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div className={styles.whatToBringIconFilters}>
+                <input
+                  type="search"
+                  value={contactIconPicker.search}
+                  onChange={(e) => setContactIconPicker((prev) => ({ ...prev, search: e.target.value }))}
+                  placeholder="Поиск иконки..."
+                  className={styles.whatToBringIconSearch}
+                />
+                <select
+                  value={contactIconPicker.group}
+                  onChange={(e) => setContactIconPicker((prev) => ({ ...prev, group: e.target.value }))}
+                  className={styles.whatToBringIconGroupSelect}
+                >
+                  <option value="all">Все</option>
+                  {getIconGroups().map((group) => (
+                    <option key={group.id} value={group.id}>{group.label}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                const groups = getIconGroups();
+                const baseNames = contactIconPicker.group === 'all'
+                  ? MUI_ICON_NAMES
+                  : (groups.find((g) => g.id === contactIconPicker.group)?.iconNames || []);
+                const query = String(contactIconPicker.search || '').trim().toLowerCase();
+                const names = query ? baseNames.filter((name) => name.toLowerCase().includes(query)) : baseNames;
+                const applyIcon = (iconName) => {
+                  const key = contactIconPicker.fieldKey;
+                  if (!key) return;
+                  const currentValue = recordData[key];
+                  const normalizedValue = (currentValue && typeof currentValue === 'object')
+                    ? currentValue
+                    : { value: typeof currentValue === 'string' ? currentValue : '' };
+                  handleFieldChange(key, { ...normalizedValue, icon: iconName, iconType: 'library' });
+                  setContactIconPicker({ open: false, fieldKey: null, search: '', group: 'all' });
+                };
+                return (
+                  <div className={styles.whatToBringIconGridWrap}>
+                    <button
+                      type="button"
+                      onClick={() => applyIcon('')}
+                      className={styles.whatToBringIconGridItem}
+                      title="Без иконки"
+                    >
+                      —
+                    </button>
+                    {names.map((name) => {
+                      const Icon = MUI_ICONS[name];
+                      if (!Icon) return null;
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => applyIcon(name)}
+                          className={styles.whatToBringIconGridItem}
+                          title={name}
+                        >
+                          <Icon size={20} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <ConfirmModal
         open={Boolean(infoModal)}

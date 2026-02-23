@@ -12,14 +12,11 @@ import styles from '../admin.module.css';
 
 // Категории типов блоков для аккордеона в настройке структуры
 const BLOCK_CATEGORIES = [
-  { id: 'text', label: 'Текст и заголовки', types: ['heading', 'text', 'quote', 'code'] },
-  { id: 'media', label: 'Медиа', types: ['image', 'gallery', 'video', 'audio', 'document'] },
-  { id: 'lists', label: 'Списки и таблицы', types: ['list', 'table'] },
-  { id: 'layout', label: 'Оформление', types: ['separator', 'button'] },
-  { id: 'interactive', label: 'Интерактив', types: ['accordion', 'tabs', 'carousel'] },
-  { id: 'map-form', label: 'Карта и форма', types: ['map', 'form'] },
-  { id: 'content', label: 'Блоки контента', types: ['cards', 'team', 'reviews', 'partners', 'timeline'] },
-  { id: 'contacts', label: 'Контакты и соцсети', types: ['social', 'contacts', 'pricing'] },
+  { id: 'base', label: 'Базовые', types: ['heading', 'text', 'number', 'boolean', 'date', 'datetime'] },
+  { id: 'choice', label: 'Выпадающие списки и связи', types: ['multiselect', 'relatedEntities'] },
+  { id: 'links', label: 'Ссылки и контакты', types: ['url', 'contact'] },
+  { id: 'media', label: 'Медиа и файлы', types: ['image', 'gallery', 'file', 'document', 'video', 'audio'] },
+  { id: 'structured', label: 'Структурированные', types: ['list', 'table', 'accordion', 'tabs', 'quote', 'json'] },
 ];
 
 // Системные пункты меню (неудаляемые) - только Настройки
@@ -84,7 +81,7 @@ export default function AdminSettingsPage() {
     return false;
   }, [structureModal, structureFields, resourceMetadata, stripAdminPrefix]);
   const [structureBlockSearch, setStructureBlockSearch] = useState('');
-  const [structureAccordionOpen, setStructureAccordionOpen] = useState(new Set(['text']));
+  const [structureAccordionOpen, setStructureAccordionOpen] = useState(new Set(['base']));
   const [structureDraggedIndex, setStructureDraggedIndex] = useState(null);
   const [structureDragOverIndex, setStructureDragOverIndex] = useState(null);
   const structureDragOverRef = useRef(null);
@@ -1841,7 +1838,7 @@ export default function AdminSettingsPage() {
                                   const slug = stripAdminPrefix(item.url);
                                   setStructureModal({ open: true, itemId: item.id, itemLabel: item.label, slug });
                                   setStructureBlockSearch('');
-                                  setStructureAccordionOpen(new Set(['text']));
+                                  setStructureAccordionOpen(new Set(['base']));
                                   // Загружаем текущую структуру полей
                                   loadStructureFields(slug);
                                 }}

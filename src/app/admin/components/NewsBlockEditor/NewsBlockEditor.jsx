@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   GripVertical, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, X, Type, Image, Images, Quote, Video, Heading, Plus,
   List, ListOrdered, Table, Minus, MousePointerClick, ChevronsDownUp, LayoutGrid, GalleryHorizontal, MapPin, FileText, Grid3x3,
-  Code, Instagram, Facebook, Share2, DollarSign, Users, Star, Building2, Phone, Mail, Clock, Music, File, Link2
+  Code, Instagram, Facebook, Share2, DollarSign, Users, Star, Building2, Phone, Clock, Music, File, Link2, Hash, Upload
 } from 'lucide-react';
 import RichTextEditor from '@/components/RichTextEditor';
-import { dynamicPageRecordsAPI, getImageUrl, menuAPI, structureAPI } from '@/lib/api';
+import { dynamicPageRecordsAPI, getImageUrl, menuAPI, structureAPI, mediaAPI } from '@/lib/api';
+import { MUI_ICON_NAMES, MUI_ICONS, getMuiIconComponent, getIconGroups } from '../WhatToBringIcons';
 import styles from './NewsBlockEditor.module.css';
 
 function PendingImage({ file, alt = '', className }) {
@@ -26,35 +28,28 @@ function PendingImage({ file, alt = '', className }) {
 }
 
 const BLOCK_TYPES = [
-  // Существующие 6 блоков
-  { type: 'heading', label: 'Заголовок (якорь)', icon: Heading },
-  { type: 'text', label: 'Текстовый блок', icon: Type },
-  { type: 'image', label: 'Одна картинка', icon: Image },
-  { type: 'gallery', label: 'Галерея картинок', icon: Images },
+  { type: 'heading', label: 'Заголовок', icon: Heading },
+  { type: 'text', label: 'Текст', icon: Type },
+  { type: 'number', label: 'Число', icon: Hash },
+  { type: 'boolean', label: 'Флаг (Да/Нет)', icon: MousePointerClick },
+  { type: 'date', label: 'Дата', icon: Clock },
+  { type: 'datetime', label: 'Дата и время', icon: Clock },
+  { type: 'multiselect', label: 'Выпадающий список', icon: ListOrdered },
+  { type: 'url', label: 'Ссылка (URL)', icon: Link2 },
+  { type: 'contact', label: 'Контакт (email, телефон, ссылка)', icon: Phone },
+  { type: 'image', label: 'Изображение', icon: Image },
+  { type: 'gallery', label: 'Галерея', icon: Images },
+  { type: 'file', label: 'Файл', icon: File },
+  { type: 'document', label: 'Документ', icon: File },
+  { type: 'video', label: 'Видео', icon: Video },
+  { type: 'audio', label: 'Аудио', icon: Music },
   { type: 'quote', label: 'Цитата', icon: Quote },
-  { type: 'video', label: 'Видео VK', icon: Video },
-  // 20 новых блоков
   { type: 'list', label: 'Список', icon: List },
   { type: 'table', label: 'Таблица', icon: Table },
-  { type: 'separator', label: 'Разделитель', icon: Minus },
-  { type: 'button', label: 'Кнопка/CTA', icon: MousePointerClick },
-  { type: 'accordion', label: 'Аккордеон/FAQ', icon: ChevronsDownUp },
+  { type: 'accordion', label: 'Аккордеон', icon: ChevronsDownUp },
   { type: 'tabs', label: 'Табы', icon: LayoutGrid },
-  { type: 'carousel', label: 'Карусель/Слайдер', icon: GalleryHorizontal },
-  { type: 'map', label: 'Карта', icon: MapPin },
-  { type: 'form', label: 'Форма обратной связи', icon: FileText },
-  { type: 'cards', label: 'Карточки/Grid', icon: Grid3x3 },
-  { type: 'code', label: 'Код/Code block', icon: Code },
-  { type: 'social', label: 'Социальные сети', icon: Share2 },
-  { type: 'pricing', label: 'Цены/Тарифы', icon: DollarSign },
-  { type: 'team', label: 'Команда/Персонал', icon: Users },
-  { type: 'reviews', label: 'Отзывы/Рейтинги', icon: Star },
-  { type: 'partners', label: 'Логотипы партнеров', icon: Building2 },
-  { type: 'contacts', label: 'Контакты', icon: Phone },
   { type: 'relatedEntities', label: 'Связанные сущности', icon: Link2 },
-  { type: 'timeline', label: 'Временная шкала', icon: Clock },
-  { type: 'audio', label: 'Аудио', icon: Music },
-  { type: 'document', label: 'Документ/PDF', icon: File },
+  { type: 'json', label: 'JSON', icon: Code },
 ];
 
 function generateBlockId() {
@@ -69,10 +64,26 @@ function createEmptyBlock(type) {
       return { ...base, data: { text: '' } };
     case 'text':
       return { ...base, data: { content: '' } };
+    case 'number':
+      return { ...base, data: { value: '' } };
+    case 'boolean':
+      return { ...base, data: { value: false } };
+    case 'date':
+      return { ...base, data: { value: '' } };
+    case 'datetime':
+      return { ...base, data: { value: '' } };
+    case 'multiselect':
+      return { ...base, data: { values: [] } };
+    case 'url':
+      return { ...base, data: { value: '' } };
+    case 'contact':
+      return { ...base, data: { value: '', icon: '', iconType: 'library' } };
     case 'image':
       return { ...base, data: { url: '' } };
     case 'gallery':
       return { ...base, data: { images: [] } };
+    case 'file':
+      return { ...base, data: { title: '', url: '' } };
     case 'quote':
       return { ...base, data: { content: '' } };
     case 'video':
@@ -109,16 +120,14 @@ function createEmptyBlock(type) {
       return { ...base, data: { reviews: [] } };
     case 'partners':
       return { ...base, data: { logos: [] } };
-    case 'contacts':
-      return { ...base, data: { address: '', phone: '', email: '' } };
     case 'relatedEntities':
       return { ...base, data: { resourceSlug: '', resourceLabel: '', selectedIds: [], selectedItems: [] } };
-    case 'timeline':
-      return { ...base, data: { events: [] } };
     case 'audio':
       return { ...base, data: { url: '' } };
     case 'document':
       return { ...base, data: { url: '', title: '' } };
+    case 'json':
+      return { ...base, data: { value: '{}' } };
     default:
       return { ...base, data: {} };
   }
@@ -204,6 +213,8 @@ export default function NewsBlockEditor({
   const [recordsLoadingBySlug, setRecordsLoadingBySlug] = useState({});
   const [relatedSearchByBlockId, setRelatedSearchByBlockId] = useState({});
   const [relatedSelectionCacheByBlockId, setRelatedSelectionCacheByBlockId] = useState({});
+  const [contactIconPicker, setContactIconPicker] = useState({ open: false, blockId: null, group: 'all', search: '' });
+  const [contactIconUploadingByBlockId, setContactIconUploadingByBlockId] = useState({});
   const relatedHeadingMetaBySlugRef = useRef({});
   const relatedHeadingMetaLoadingBySlugRef = useRef({});
   const addBlockRef = useRef(null);
@@ -334,6 +345,36 @@ export default function NewsBlockEditor({
       i === index ? { ...b, ...updates, data: { ...b.data, ...(updates.data || {}) } } : b
     );
     onChange(next.map((b, i) => ({ ...b, order: i })));
+  };
+
+  const updateContactBlockById = (blockId, dataPatch) => {
+    const blockIndex = sortedBlocks.findIndex((b) => b.id === blockId);
+    if (blockIndex < 0) return;
+    updateBlock(blockIndex, { data: { ...(sortedBlocks[blockIndex]?.data || {}), ...dataPatch } });
+  };
+
+  const openContactIconPicker = (blockId) => {
+    setContactIconPicker({ open: true, blockId, group: 'all', search: '' });
+  };
+
+  const closeContactIconPicker = () => {
+    setContactIconPicker((prev) => ({ ...prev, open: false, blockId: null, group: 'all', search: '' }));
+  };
+
+  const handleContactIconUpload = async (blockId, file) => {
+    if (!file) return;
+    setContactIconUploadingByBlockId((prev) => ({ ...prev, [blockId]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await mediaAPI.upload(formData);
+      const uploadedUrl = res.data?.url || '';
+      updateContactBlockById(blockId, { icon: uploadedUrl, iconType: 'upload' });
+    } catch (error) {
+      console.error('Ошибка загрузки иконки контакта:', error);
+    } finally {
+      setContactIconUploadingByBlockId((prev) => ({ ...prev, [blockId]: false }));
+    }
   };
 
   const addBlock = (type) => {
@@ -960,6 +1001,193 @@ export default function NewsBlockEditor({
                 </>
               )}
 
+              {block.type === 'number' && (
+                <>
+                  <label className={styles.blockLabel}>Число</label>
+                  <input
+                    type="number"
+                    value={block.data?.value ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
+                    className={styles.blockInput}
+                    placeholder="0"
+                  />
+                </>
+              )}
+
+              {block.type === 'boolean' && (
+                <>
+                  <label className={styles.blockLabel}>Флаг (Да/Нет)</label>
+                  <label className={styles.visibilityToggle} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(block.data?.value)}
+                      onChange={(e) => updateBlock(index, { data: { value: e.target.checked } })}
+                    />
+                    <span className={styles.visibilitySwitch} />
+                    <span className={styles.visibilityLabel}>{block.data?.value ? 'Да' : 'Нет'}</span>
+                  </label>
+                </>
+              )}
+
+              {block.type === 'date' && (
+                <>
+                  <label className={styles.blockLabel}>Дата</label>
+                  <input
+                    type="date"
+                    value={block.data?.value ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
+                    className={styles.blockInput}
+                  />
+                </>
+              )}
+
+              {block.type === 'datetime' && (
+                <>
+                  <label className={styles.blockLabel}>Дата и время</label>
+                  <input
+                    type="datetime-local"
+                    value={block.data?.value ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
+                    className={styles.blockInput}
+                  />
+                </>
+              )}
+
+              {block.type === 'multiselect' && (
+                <>
+                  <label className={styles.blockLabel}>Выпадающий список</label>
+                  {(block.data?.values || []).map((item, itemIdx) => (
+                    <div key={itemIdx} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        value={item}
+                        onChange={(e) => {
+                          const values = [...(block.data?.values || [])];
+                          values[itemIdx] = e.target.value;
+                          updateBlock(index, { data: { ...block.data, values } });
+                        }}
+                        className={styles.blockInput}
+                        placeholder={`Значение ${itemIdx + 1}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const values = (block.data?.values || []).filter((_, i) => i !== itemIdx);
+                          updateBlock(index, { data: { ...block.data, values } });
+                        }}
+                        className={styles.listItemDeleteBtn}
+                        aria-label="Удалить значение"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const values = block.data?.values || [];
+                      updateBlock(index, { data: { ...block.data, values: [...values, ''] } });
+                    }}
+                    className={styles.addListItemBtn}
+                  >
+                    + Добавить значение
+                  </button>
+                </>
+              )}
+
+              {block.type === 'url' && (
+                <>
+                  <label className={styles.blockLabel}>Ссылка (URL)</label>
+                  <input
+                    type="url"
+                    value={block.data?.value ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
+                    className={styles.blockInput}
+                    placeholder="https://example.com"
+                  />
+                </>
+              )}
+
+              {block.type === 'contact' && (
+                <>
+                  <label className={styles.blockLabel}>Контакт (email, телефон, ссылка)</label>
+                  <div className={styles.whatToBringBlock} style={{ margin: 0 }}>
+                    <div className={styles.whatToBringIconCell}>
+                      <div className={styles.whatToBringTypeSwitcher} role="group" aria-label="Источник иконки">
+                      <button
+                        type="button"
+                        className={`${styles.whatToBringTypeSegment} ${block.data?.iconType === 'upload' ? styles.whatToBringTypeSegmentActive : ''}`}
+                        onClick={() => updateBlock(index, { data: { ...block.data, iconType: 'upload', icon: '' } })}
+                      >
+                        Загрузить
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.whatToBringTypeSegment} ${block.data?.iconType === 'library' || !block.data?.iconType ? styles.whatToBringTypeSegmentActive : ''}`}
+                        onClick={() => updateBlock(index, { data: { ...block.data, iconType: 'library', icon: '' } })}
+                      >
+                        Библиотека
+                      </button>
+                      </div>
+                    <div className={styles.whatToBringIconPreview}>
+                      {block.data?.iconType === 'upload' ? (
+                        <>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id={`contact-icon-upload-${block.id}`}
+                            style={{ display: 'none' }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                await handleContactIconUpload(block.id, file);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                          <label
+                            htmlFor={`contact-icon-upload-${block.id}`}
+                            className={styles.whatToBringUploadBtn}
+                            title="Загрузить иконку"
+                          >
+                            {block.data?.icon ? (
+                              <img src={getImageUrl(block.data.icon)} alt="" className={styles.whatToBringUploadImg} />
+                            ) : (
+                              <Upload size={24} />
+                            )}
+                          </label>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openContactIconPicker(block.id)}
+                          className={styles.whatToBringMuiBtn}
+                          title="Выбрать иконку"
+                          aria-label="Выбрать иконку"
+                        >
+                          {(() => {
+                            const Icon = getMuiIconComponent(block.data?.icon);
+                            if (Icon) return <Icon size={22} />;
+                            return <span className={styles.whatToBringMuiPlaceholder}>Иконка</span>;
+                          })()}
+                        </button>
+                      )}
+                    </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={block.data?.value ?? ''}
+                      onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
+                      className={styles.whatToBringTextInput}
+                      placeholder="Email, телефон, ссылка или другой контакт"
+                    />
+                  </div>
+                  {contactIconUploadingByBlockId[block.id] && (
+                    <div className={styles.hint} style={{ marginBottom: 8 }}>Загрузка иконки...</div>
+                  )}
+                </>
+              )}
+
               {block.type === 'image' && (
                 <>
                   <label className={styles.blockLabel}>Одна картинка</label>
@@ -1416,31 +1644,37 @@ export default function NewsBlockEditor({
                 </>
               )}
 
-              {block.type === 'contacts' && (
+              {block.type === 'file' && (
                 <>
-                  <label className={styles.blockLabel}>Контакты</label>
+                  <label className={styles.blockLabel}>Файл</label>
                   <input
                     type="text"
-                    value={block.data?.address ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, address: e.target.value } })}
+                    value={block.data?.title ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { ...block.data, title: e.target.value } })}
                     className={styles.blockInput}
-                    placeholder="Адрес"
+                    placeholder="Название файла"
                     style={{ marginBottom: 12 }}
                   />
                   <input
-                    type="tel"
-                    value={block.data?.phone ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, phone: e.target.value } })}
+                    type="text"
+                    value={block.data?.url ?? ''}
+                    onChange={(e) => updateBlock(index, { data: { ...block.data, url: e.target.value } })}
                     className={styles.blockInput}
-                    placeholder="Телефон"
-                    style={{ marginBottom: 12 }}
+                    placeholder="URL файла"
                   />
-                  <input
-                    type="email"
-                    value={block.data?.email ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, email: e.target.value } })}
+                </>
+              )}
+
+              {block.type === 'json' && (
+                <>
+                  <label className={styles.blockLabel}>JSON</label>
+                  <textarea
+                    value={block.data?.value ?? '{}'}
+                    onChange={(e) => updateBlock(index, { data: { value: e.target.value } })}
                     className={styles.blockInput}
-                    placeholder="Email"
+                    rows={8}
+                    style={{ fontFamily: 'monospace', resize: 'vertical' }}
+                    placeholder='{"key":"value"}'
                   />
                 </>
               )}
@@ -2889,6 +3123,112 @@ export default function NewsBlockEditor({
           </div>
         )}
       </div>
+      )}
+
+      {contactIconPicker.open && typeof document !== 'undefined' && createPortal(
+        <div
+          onClick={(e) => e.target === e.currentTarget && closeContactIconPicker()}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Выбор иконки контакта"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              background: '#fff',
+              borderRadius: 16,
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 20px 50px rgba(15,23,42,0.25)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
+              <strong style={{ color: '#0f172a' }}>Выберите иконку</strong>
+              <button type="button" onClick={closeContactIconPicker} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 12 }}>
+              <div className={styles.whatToBringIconFilters}>
+                <input
+                  type="search"
+                  value={contactIconPicker.search}
+                  onChange={(e) => setContactIconPicker((prev) => ({ ...prev, search: e.target.value }))}
+                  placeholder="Поиск иконки..."
+                  className={styles.whatToBringIconSearch}
+                />
+                <select
+                  value={contactIconPicker.group}
+                  onChange={(e) => setContactIconPicker((prev) => ({ ...prev, group: e.target.value }))}
+                  className={styles.whatToBringIconGroupSelect}
+                >
+                  <option value="all">Все</option>
+                  {getIconGroups().map((group) => (
+                    <option key={group.id} value={group.id}>{group.label}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                const groups = getIconGroups();
+                const baseNames = contactIconPicker.group === 'all'
+                  ? MUI_ICON_NAMES
+                  : (groups.find((g) => g.id === contactIconPicker.group)?.iconNames || []);
+                const query = String(contactIconPicker.search || '').trim().toLowerCase();
+                const names = query ? baseNames.filter((name) => name.toLowerCase().includes(query)) : baseNames;
+                return (
+                  <div className={styles.whatToBringIconGridWrap}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (contactIconPicker.blockId) {
+                          updateContactBlockById(contactIconPicker.blockId, { icon: '', iconType: 'library' });
+                        }
+                        closeContactIconPicker();
+                      }}
+                      className={styles.whatToBringIconGridItem}
+                      title="Без иконки"
+                    >
+                      —
+                    </button>
+                    {names.map((name) => {
+                      const Icon = MUI_ICONS[name];
+                      if (!Icon) return null;
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            if (contactIconPicker.blockId) {
+                              updateContactBlockById(contactIconPicker.blockId, { icon: name, iconType: 'library' });
+                            }
+                            closeContactIconPicker();
+                          }}
+                          className={styles.whatToBringIconGridItem}
+                          title={name}
+                        >
+                          <Icon size={20} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
     </div>
