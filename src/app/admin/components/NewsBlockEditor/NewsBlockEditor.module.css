@@ -1,0 +1,868 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.blocksList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.blockRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.blockRow:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.invalidBlockRow {
+  outline: 2px solid transparent;
+  outline-offset: 0;
+}
+
+.invalidBlockRowPulse {
+  animation: invalidBlockOutlinePulse 0.8s ease-out 5;
+}
+
+@keyframes invalidBlockOutlinePulse {
+  0% {
+    outline-color: rgba(220, 38, 38, 0);
+  }
+  20% {
+    outline-color: rgba(220, 38, 38, 0.52);
+  }
+  100% {
+    outline-color: rgba(220, 38, 38, 0);
+  }
+}
+
+.insertBlockArea {
+  position: relative;
+  height: 24px;
+  margin: 10px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.insertLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: #2563eb;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: center;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.insertBlockAreaVisible .insertLine {
+  transform: translateY(-50%) scaleX(1);
+  opacity: 1;
+}
+
+.insertPlusBtn {
+  position: relative;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: #2563eb;
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  opacity: 0;
+  transform: scale(0.5);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.2s;
+}
+
+.insertBlockAreaVisible .insertPlusBtn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.insertBlockAreaVisible .insertPlusBtn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+.insertDropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 12px;
+  padding: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, auto);
+  gap: 2px;
+  max-height: calc(6 * 48px + 16px);
+  overflow-y: auto;
+  /* Плавная смена позиции при прокрутке (через transform) */
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  animation: dropdownFadeIn 0.25s ease forwards;
+}
+
+@keyframes dropdownFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Снизу — как по умолчанию */
+.insertDropdownBottom {
+  transform: translate(-50%, 0);
+}
+
+/* Сверху — сдвиг вверх через transform для плавной анимации при смене */
+.insertDropdownTop {
+  transform: translate(-50%, calc(-100% - 45px));
+}
+
+.blockControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: #94a3b8;
+  cursor: grab;
+  border: none;
+  background: none;
+  border-radius: 6px;
+}
+
+.dragHandle:hover {
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.moveButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moveBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.moveBtn:hover:not(:disabled) {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.moveBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.orderBadge {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2563eb;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.blockContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.structureOnlyLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.structureOnlyLabel svg {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.blockLabel {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.blockInput {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.blockInput:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.listItemRow {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+.listItemRowNoMargin {
+  margin-bottom: 0;
+}
+
+.listItemDragging {
+  opacity: 0.55;
+}
+
+.listItemDragOver {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+.listItemControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.accordionItemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.listItemDragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #94a3b8;
+  cursor: grab;
+  border-radius: 6px;
+}
+
+.listItemDragHandle:hover {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.listItemDragHandle:active {
+  cursor: grabbing;
+}
+
+.listItemDeleteBtn {
+  width: 25px;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #dc2626;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.listItemDeleteBtn:hover {
+  background: #fecaca;
+}
+
+.addListItemBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  margin-top: 4px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.addListItemBtn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.entitiesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.entitiesSectionTitle {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 600;
+  margin: 2px 0 8px;
+}
+
+.entitiesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.entitiesListSelected {
+  max-height: 430px;
+}
+
+.entitiesListAvailable {
+  max-height: 430px;
+}
+
+.entityCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.entityCardSelected {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+
+.entityImage {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.entityImagePlaceholder {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.entityMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.entityTitle {
+  font-size: 0.9rem;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entitySelectedContent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.entityAddBtn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.entityAddBtn:hover {
+  background: #dbeafe;
+}
+
+.entitySwitch {
+  position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.entitySwitch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.entitySwitchSlider {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #dbe3ef;
+  transition: background 0.2s ease;
+  position: relative;
+}
+
+.entitySwitchSlider::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
+  transition: transform 0.2s ease;
+}
+
+.entitySwitch input:checked + .entitySwitchSlider {
+  background: #2563eb;
+}
+
+.entitySwitch input:checked + .entitySwitchSlider::after {
+  transform: translateX(18px);
+}
+
+.quoteInput {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.quoteInput:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.hint code {
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+.uploadArea {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border: 2px dashed #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #64748b;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.uploadArea:hover {
+  border-color: #2563eb;
+  background: #f8fafc;
+  color: #2563eb;
+}
+
+.imagePreview {
+  position: relative;
+  max-width: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.imagePreview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.imageActions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.replaceBtn {
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.replaceBtn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.removeBtn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.removeBtn:hover {
+  background: #dc2626;
+}
+
+.galleryPreview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.galleryItemWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 8px;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+
+.galleryItemWrap.galleryItemDragging {
+  opacity: 0.6;
+}
+
+.galleryItemWrap.galleryItemDragOver {
+  box-shadow: 0 0 0 2px #2563eb;
+}
+
+.galleryItemWrap .galleryItem {
+  flex: 1;
+  min-width: 0;
+  order: 1;
+}
+
+.galleryItemWrap .galleryActions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  order: 2;
+}
+
+.galleryItemWrap .imageDragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: #94a3b8;
+  cursor: grab;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.galleryItemWrap .imageDragHandle:hover {
+  color: #64748b;
+  background: #e2e8f0;
+}
+
+.galleryItemWrap .imageDragHandle:active {
+  cursor: grabbing;
+}
+
+.galleryItemWrap .moveButtons {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.galleryItemWrap .moveButtons .moveBtn {
+  padding: 6px;
+}
+
+.galleryItemWrap .galleryActions .removeBtn {
+  padding: 6px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.galleryItemWrap .galleryActions .removeBtn:hover {
+  background: #fecaca;
+}
+
+.galleryItem {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.galleryItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.deleteBtn {
+  flex-shrink: 0;
+  padding: 8px;
+  border: none;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteBtn:hover {
+  background: #fecaca;
+}
+
+.addBlockWrap {
+  position: relative;
+  isolation: isolate;
+}
+
+.addBlockBtn {
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #2563eb;
+  background: transparent;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.addBlockBtn:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.addBlockDropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, auto);
+  gap: 2px;
+  max-height: calc(6 * 48px + 16px);
+  overflow-y: auto;
+}
+
+.addBlockOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s;
+  align-self: stretch;
+}
+
+.addBlockOption:hover {
+  background: #f1f5f9;
+}
+
+/* Переключатели (Toggle Switches) */
+.visibilityToggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.visibilityToggle:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.visibilityToggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.visibilitySwitch {
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  background: #e2e8f0;
+  border-radius: 12px;
+  position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.visibilitySwitch::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.visibilityToggle input:checked + .visibilitySwitch {
+  background: #22c55e;
+}
+
+.visibilityToggle input:checked + .visibilitySwitch::after {
+  transform: translateX(20px);
+}
+
+.visibilityLabel {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  user-select: none;
+}

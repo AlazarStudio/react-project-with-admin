@@ -1,0 +1,230 @@
+/* Общие стили модальных окон */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dialog {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 400px;
+  width: 100%;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header {
+  padding: 20px 24px 0;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.body {
+  padding: 16px 24px 24px;
+}
+
+.message {
+  font-size: 0.95rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.actionsSingle {
+  justify-content: center;
+}
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btnCancel {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btnCancel:hover {
+  background: #e2e8f0;
+}
+
+.btnConfirm {
+  background: #2563eb;
+  color: white;
+}
+
+.btnConfirm:hover {
+  background: #1d4ed8;
+}
+
+.btnDanger {
+  background: #dc2626;
+  color: white;
+}
+
+.btnDanger:hover {
+  background: #b91c1c;
+}
+
+.btnPrimary {
+  background: #2563eb;
+  color: white;
+  min-width: 100px;
+}
+
+.btnPrimary:hover {
+  background: #1d4ed8;
+}
+
+/* Иконка для предупреждения / ошибки */
+.iconWrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.iconWrapDanger {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.iconWrapSuccess {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.iconWrapError {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.iconWrapInfo {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+/* Стили для модалки деталей отзыва */
+.closeBtn {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.closeBtn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.reviewDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.reviewDetailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reviewDetailLabel {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reviewDetailValue {
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.reviewText {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.badgeActive {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.badgePending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.badgeRejected {
+  background: #fee2e2;
+  color: #dc2626;
+}

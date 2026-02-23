@@ -1,0 +1,5 @@
+/* Область ввода редактора (где печатают текст) — минимальная высота и шрифт по умолчанию */
+.wrapper :global(.ql-editor) {
+  min-height: var(--editor-min-height, 300px);
+  font-size: 16px;
+}
