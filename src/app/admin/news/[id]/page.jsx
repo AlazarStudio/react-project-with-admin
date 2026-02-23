@@ -245,7 +245,9 @@ export default function NewsEditPage() {
     const blocksToSend = (formData.blocks || []).map((b) => ({ ...b, data: { ...b.data } }));
 
     const hasPreview = !!pendingImageFile;
-    const hasBlocks = Object.values(pendingBlockFiles).some((p) => p && (p.url || (p.images?.length ?? 0) > 0));
+    const hasBlocks = Object.values(pendingBlockFiles).some(
+      (p) => p && (p.url || (p.images?.length ?? 0) > 0 || (p.documentFile instanceof Blob))
+    );
     const totalWeight = (hasPreview ? 1 : 0) + (hasBlocks ? 1 : 0) + 1;
     const initialSteps = [
       { label: 'Загрузка превью', status: hasPreview ? 'pending' : 'done' },
@@ -283,8 +285,13 @@ export default function NewsEditPage() {
         setSaveProgress((prev) => ({ ...prev, steps: prev.steps.map((s, i) => (i === 0 ? { ...s, status: 'done' } : i === 1 && hasBlocks ? { ...s, status: 'active' } : s)), totalProgress: Math.round((1 / totalWeight) * 100) }));
       }
 
-      const blockEntries = Object.entries(pendingBlockFiles).filter(([, p]) => p && (p.url || (p.images?.length ?? 0) > 0));
-      const totalBlockFiles = blockEntries.reduce((acc, [, p]) => acc + (p.url ? 1 : 0) + (p.images?.length ?? 0), 0);
+      const blockEntries = Object.entries(pendingBlockFiles).filter(
+        ([, p]) => p && (p.url || (p.images?.length ?? 0) > 0 || (p.documentFile instanceof Blob))
+      );
+      const totalBlockFiles = blockEntries.reduce(
+        (acc, [, p]) => acc + (p.url ? 1 : 0) + (p.images?.length ?? 0) + (p.documentFile ? 1 : 0),
+        0
+      );
       let blockUploadIdx = 0;
 
       for (const [blockId, pending] of blockEntries) {
@@ -308,6 +315,32 @@ export default function NewsEditPage() {
             },
           });
           if (res.data?.url) block.data = { ...block.data, url: res.data.url };
+          blockUploadIdx++;
+        }
+        if (pending.documentFile && block.type === 'file') {
+          const fd = new FormData();
+          fd.append('file', pending.documentFile);
+          const res = await mediaAPI.upload(fd, {
+            onUploadProgress: (e) => {
+              const pct = e.total ? Math.round((e.loaded / e.total) * 100) : 0;
+              const overall = totalBlockFiles ? Math.round(((blockUploadIdx * 100 + pct) / totalBlockFiles)) : 0;
+              setSaveProgress((prev) => {
+                const steps = prev.steps.map((s, i) => (i === 1 && s.status === 'active' ? { ...s, progress: overall, subLabel: `Файл ${blockUploadIdx + 1} из ${totalBlockFiles}` } : s));
+                const completedWeight = steps.filter((s) => s.status === 'done').length;
+                const activeStep = steps.find((s) => s.status === 'active');
+                const activeProgress = activeStep?.progress ?? 0;
+                const totalProgress = Math.round(((completedWeight + activeProgress / 100) / totalWeight) * 100);
+                return { ...prev, steps, totalProgress };
+              });
+            },
+          });
+          if (res.data?.url) {
+            block.data = {
+              ...block.data,
+              url: res.data.url,
+              title: block.data?.title || pending.documentFile.name || '',
+            };
+          }
           blockUploadIdx++;
         }
         if (pending.images?.length) {

@@ -15,7 +15,7 @@ const BLOCK_CATEGORIES = [
   { id: 'base', label: 'Базовые', types: ['heading', 'text', 'number', 'boolean', 'date', 'datetime'] },
   { id: 'choice', label: 'Выпадающие списки и связи', types: ['multiselect', 'relatedEntities'] },
   { id: 'links', label: 'Ссылки и контакты', types: ['url', 'contact'] },
-  { id: 'media', label: 'Медиа и файлы', types: ['image', 'gallery', 'file', 'document', 'video', 'audio'] },
+  { id: 'media', label: 'Медиа и файлы', types: ['image', 'gallery', 'file', 'video', 'audio'] },
   { id: 'structured', label: 'Структурированные', types: ['list', 'table', 'accordion', 'tabs', 'quote', 'json'] },
 ];
 

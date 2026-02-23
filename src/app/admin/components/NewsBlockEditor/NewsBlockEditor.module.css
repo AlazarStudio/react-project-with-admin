@@ -578,6 +578,14 @@
   display: block;
 }
 
+.filePreviewName {
+  padding: 12px 16px;
+  background: var(--admin-bg-secondary, #f3f4f6);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
 .imageActions {
   position: absolute;
   top: 8px;
@@ -614,6 +622,331 @@
 
 .removeBtn:hover {
   background: #dc2626;
+}
+
+/* Таблица: зоны вставки между столбцами/строками */
+.tableWrap {
+  overflow: visible;
+  margin-bottom: 12px;
+}
+
+.dataTable {
+  width: 100%;
+  min-width: 400px;
+  border-collapse: collapse;
+  border: 1px solid #e2e8f0;
+}
+
+.tableInsertCol {
+  width: 2px;
+  min-width: 2px;
+  max-width: 2px;
+  padding: 0;
+  vertical-align: middle;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.tableInsertCol::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #0ea5e9;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tableInsertCol:hover::before {
+  opacity: 1;
+}
+
+.tableInsertColInner {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  background: #0ea5e9;
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.4);
+  z-index: 1;
+}
+
+.tableInsertCol:hover .tableInsertColInner {
+  display: flex;
+}
+
+.tableInsertColInner:hover {
+  background: #0284c7;
+}
+
+
+.tableTh {
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  min-width: 80px;
+  vertical-align: top;
+}
+
+.tableThDragOver {
+  background: #e0f2fe;
+  border-color: #0ea5e9;
+}
+
+.tableThInner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tableThGrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  color: #94a3b8;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.tableThGrip:hover {
+  color: #64748b;
+}
+
+.tableThGrip:active {
+  cursor: grabbing;
+}
+
+.tableThInner input,
+.tableThInner .tableCellTextarea {
+  margin: 0;
+  padding: 4px 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+
+.tableCellTextarea {
+  resize: vertical;
+  min-height: 2.5em;
+  max-height: 300px;
+  font-family: inherit;
+}
+
+.tableTh .tableRemoveCol {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: #fef2f2;
+  color: #dc2626;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tableTh .tableRemoveCol:hover {
+  background: #fee2e2;
+}
+
+.tableTd {
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.tableTd input,
+.tableTd .tableCellTextarea {
+  margin: 0;
+  padding: 4px 8px;
+  width: 100%;
+  font-size: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.tableTd .tableCellTextarea {
+  resize: vertical;
+  min-height: 2.5em;
+  max-height: 300px;
+  font-family: inherit;
+}
+
+.tableDataRow td:first-of-type {
+  min-height: 40px;
+}
+
+.tableRowActions {
+  width: 1%;
+  min-width: 40px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  background: #fafafa;
+  vertical-align: middle;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.tableRowActions .tableRowGrip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  margin-bottom: 4px;
+  color: #94a3b8;
+  cursor: grab;
+  vertical-align: middle;
+}
+
+.tableRowActions .tableRowGrip:hover {
+  color: #64748b;
+}
+
+.tableRowActions .tableRowGrip:active {
+  cursor: grabbing;
+}
+
+.tableDataRowDragOver {
+  background: #e0f2fe;
+}
+
+.tableDataRowDragOver td {
+  border-color: #0ea5e9;
+}
+
+.tableRemoveRow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin: 0 auto;
+  background: #fef2f2;
+  color: #dc2626;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tableRemoveRow:hover {
+  background: #fee2e2;
+}
+
+.tableInsertRowBetween {
+  cursor: pointer;
+  background: #f8fafc;
+  transition: background 0.15s;
+}
+
+.tableInsertRowBetween:hover {
+  background: #f8fafc;
+}
+
+.tableInsertRowBetweenTd {
+  height: 2px;
+  min-height: 2px;
+  padding: 0;
+  border: none;
+  border-top: none;
+  vertical-align: middle;
+  text-align: center;
+  position: relative;
+  background: #f8fafc;
+}
+
+.tableInsertRowBetweenTd::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: #0ea5e9;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tableInsertRowBetween:hover .tableInsertRowBetweenTd::before {
+  opacity: 1;
+}
+
+.tableInsertRowBetweenInner {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  background: #0ea5e9;
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.4);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.tableInsertRowBetweenActive .tableInsertRowBetweenInner {
+  display: flex;
+}
+
+.tableInsertRowBetweenInner:hover {
+  background: #0284c7;
+}
+
+.tableInsertRow {
+  cursor: pointer;
+  background: #f0f9ff;
+  transition: background 0.15s;
+}
+
+.tableInsertRow:hover {
+  background: #e0f2fe;
+}
+
+.tableInsertRowTd {
+  height: 40px;
+  padding: 8px 12px;
+  border: 1px dashed #7dd3fc;
+  /* border-top: 2px solid #0ea5e9; */
+  vertical-align: middle;
+}
+
+.tableInsertRowInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #0284c7;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.tableInsertRow:hover .tableInsertRowInner {
+  color: #0369a1;
 }
 
 .galleryPreview {

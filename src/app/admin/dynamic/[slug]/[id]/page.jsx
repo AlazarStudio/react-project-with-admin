@@ -3,10 +3,10 @@
 import { useState, useEffect, useContext, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, X as XIcon } from 'lucide-react';
+import { Eye, EyeOff, X as XIcon, Plus, GripVertical } from 'lucide-react';
 import { dynamicPagesAPI, dynamicPageRecordsAPI, menuAPI, mediaAPI, structureAPI, getImageUrl } from '@/lib/api';
 import { AdminHeaderRightContext, AdminBreadcrumbContext } from '../../../layout';
-import { BLOCK_TYPES, createEmptyBlock, slugFromText } from '../../../components/NewsBlockEditor';
+import { BLOCK_TYPES, createEmptyBlock, slugFromText, AutoHeightTableTextarea } from '../../../components/NewsBlockEditor';
 import { ConfirmModal } from '../../../components';
 import NewsBlockEditor from '../../../components/NewsBlockEditor';
 import { MUI_ICON_NAMES, MUI_ICONS, getMuiIconComponent, getIconGroups } from '../../../components/WhatToBringIcons';
@@ -73,6 +73,11 @@ export default function DynamicRecordEditPage() {
   const [additionalScrollRequestId, setAdditionalScrollRequestId] = useState(0);
   const [contactIconPicker, setContactIconPicker] = useState({ open: false, fieldKey: null, search: '', group: 'all' });
   const [uploadingContactFieldKey, setUploadingContactFieldKey] = useState(null);
+  const [insertRowPlusPos, setInsertRowPlusPos] = useState({ fieldKey: null, rowKey: null, x: 0, y: 0 });
+  const [draggedTableColumn, setDraggedTableColumn] = useState({ fieldKey: null, colIndex: null });
+  const [dragOverTableColumn, setDragOverTableColumn] = useState({ fieldKey: null, colIndex: null });
+  const [draggedTableRow, setDraggedTableRow] = useState({ fieldKey: null, rowIndex: null });
+  const [dragOverTableRow, setDragOverTableRow] = useState({ fieldKey: null, rowIndex: null });
   const setHeaderRight = useContext(AdminHeaderRightContext)?.setHeaderRight;
   const setBreadcrumbLabel = useContext(AdminBreadcrumbContext)?.setBreadcrumbLabel;
 
@@ -421,7 +426,9 @@ export default function DynamicRecordEditPage() {
     }));
 
     const entries = Object.entries(pendingMap || {}).filter(
-      ([, pending]) => pending && (pending.url || (pending.images?.length ?? 0) > 0)
+      ([, pending]) =>
+        pending &&
+        (pending.url || (pending.images?.length ?? 0) > 0 || (pending.documentFile instanceof Blob))
     );
 
     for (const [blockId, pending] of entries) {
@@ -433,6 +440,17 @@ export default function DynamicRecordEditPage() {
         const uploadedUrl = await uploadFileAndGetUrl(pending.url);
         if (uploadedUrl) {
           block.data = { ...block.data, url: uploadedUrl };
+        }
+      }
+
+      if (pending.documentFile instanceof Blob && block.type === 'file') {
+        const uploadedUrl = await uploadFileAndGetUrl(pending.documentFile);
+        if (uploadedUrl) {
+          block.data = {
+            ...block.data,
+            url: uploadedUrl,
+            title: block.data?.title || pending.documentFile.name || '',
+          };
         }
       }
 
@@ -498,13 +516,17 @@ export default function DynamicRecordEditPage() {
         case 'video':
         case 'audio':
           return typeof value.url === 'string' ? value.url : '';
-        case 'document':
         case 'file':
-          if (typeof value.url === 'string') return value.url;
+          if (typeof value === 'string') return value;
+          if (value && typeof value.url === 'string') return value.url;
           return '';
-        case 'multiselect':
-          if (Array.isArray(value.values)) return JSON.stringify(value.values);
-          return '';
+        case 'multiselect': {
+          const values = Array.isArray(value.values) ? value.values : [];
+          const linkEnabled = Boolean(value.linkEnabled);
+          const links = Array.isArray(value.links) ? value.links : [];
+          if (linkEnabled) return JSON.stringify({ values, linkEnabled: true, links });
+          return JSON.stringify({ values, linkEnabled: false, links: [] });
+        }
         case 'json':
           if (typeof value.value === 'string') return value.value;
           return JSON.stringify(value.value ?? {});
@@ -560,9 +582,9 @@ export default function DynamicRecordEditPage() {
       }
       case 'video':
       case 'audio':
-      case 'document':
       case 'file':
-        return asPlainText(value.url).length > 0;
+        if (value && typeof value === 'object' && value.type === 'file' && value.value) return true;
+        return asPlainText(value?.url).length > 0;
       case 'multiselect': {
         const values = Array.isArray(value.values) ? value.values : [];
         return values.some((item) => asPlainText(item).length > 0);
@@ -696,6 +718,19 @@ export default function DynamicRecordEditPage() {
             }
           } else {
             dataToSave[fieldKey] = null;
+          }
+        } else if (field.type === 'file' && value && typeof value === 'object' && value.type === 'file' && value.value) {
+          try {
+            const uploadedUrl = await uploadFileAndGetUrl(value.value);
+            dataToSave[fieldKey] = uploadedUrl;
+          } catch (error) {
+            console.error('Ошибка загрузки файла:', error);
+            setInfoModal({
+              title: 'Ошибка загрузки',
+              message: `Не удалось загрузить файл для поля "${field.label}".`,
+            });
+            setIsSaving(false);
+            return;
           }
         } else {
           dataToSave[fieldKey] = normalizeFieldValueForSave(field, value);
@@ -1090,46 +1125,124 @@ export default function DynamicRecordEditPage() {
 
       case 'video':
       case 'audio':
-      case 'document':
-      case 'file':
+      case 'file': {
+        const fileUrl = typeof value === 'string' ? value : value?.url;
+        const fileTitle = typeof value === 'object' && value?.title ? value.title : '';
+        const hasPendingFile = value && typeof value === 'object' && value.type === 'file' && value.value;
+        const hasSavedFile = typeof fileUrl === 'string' && fileUrl.length > 0;
+        const displayName = hasPendingFile ? value.value.name : (fileTitle || fileUrl || '');
         return (
           <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
             <label className={styles.blockLabel}>{label}</label>
             <input
-              type="text"
-              value={typeof value === 'object' && value?.url ? value.url : (typeof value === 'string' ? value : '')}
-              onChange={(e) => handleFieldChange(fieldKey, { url: e.target.value })}
-              className={styles.blockInput}
-              placeholder="Введите URL"
+              type="file"
+              id={`field-file-${fieldKey}`}
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) handleFieldChange(fieldKey, { type: 'file', value: file, title: file.name });
+              }}
             />
+            {(hasPendingFile || hasSavedFile) ? (
+              <div className={styles.imagePreview}>
+                <div className={styles.filePreviewName}>{displayName}</div>
+                <div className={styles.imageActions}>
+                  <label htmlFor={`field-file-${fieldKey}`} className={styles.replaceBtn}>
+                    Заменить
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleFieldChange(fieldKey, { url: '', title: '' })}
+                    className={styles.removeBtn}
+                  >
+                    <XIcon size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label htmlFor={`field-file-${fieldKey}`} className={styles.uploadArea}>
+                Загрузить файл
+              </label>
+            )}
           </div>
         );
+      }
 
       case 'multiselect': {
         const selectedValues = Array.isArray(value?.values)
           ? value.values
           : (Array.isArray(value) ? value : []);
+        const linkEnabled = Boolean(value?.linkEnabled);
+        const selectedLinks = Array.isArray(value?.links) ? value.links : [];
+        const getLink = (i) => (i < selectedLinks.length ? selectedLinks[i] : '');
         return (
           <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
             <label className={styles.blockLabel}>{label}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 12 }}>
+              <label className={styles.visibilityToggle} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={linkEnabled}
+                  onChange={(e) => {
+                    const nextLinkEnabled = e.target.checked;
+                    const links = nextLinkEnabled ? selectedValues.map((_, idx) => getLink(idx)) : [];
+                    handleFieldChange(fieldKey, { values: selectedValues, linkEnabled: nextLinkEnabled, links });
+                  }}
+                />
+                <span className={styles.visibilitySwitch} />
+                <span className={styles.visibilityLabel}>Нужна ссылка при выборе</span>
+              </label>
+              {selectedValues.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleFieldChange(fieldKey, {
+                      values: [''],
+                      linkEnabled,
+                      links: linkEnabled ? [''] : selectedLinks,
+                    });
+                  }}
+                  className={styles.addBtn}
+                  style={{ marginTop: 8 }}
+                >
+                  Добавить значение
+                </button>
+              )}
+            </div>
             {selectedValues.map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
                 <input
                   type="text"
                   value={item}
                   onChange={(e) => {
                     const newValues = [...selectedValues];
                     newValues[i] = e.target.value;
-                    handleFieldChange(fieldKey, { values: newValues });
+                    handleFieldChange(fieldKey, { values: newValues, linkEnabled, links: linkEnabled ? selectedLinks : [] });
                   }}
                   className={styles.blockInput}
                   placeholder={`Значение ${i + 1}`}
+                  style={{ flex: '1 1 120px' }}
                 />
+                {linkEnabled && (
+                  <input
+                    type="url"
+                    value={getLink(i)}
+                    onChange={(e) => {
+                      const newLinks = selectedValues.map((_, idx) => (idx === i ? e.target.value : getLink(idx)));
+                      handleFieldChange(fieldKey, { values: selectedValues, linkEnabled: true, links: newLinks });
+                    }}
+                    className={styles.blockInput}
+                    placeholder="Ссылка"
+                    style={{ flex: '1 1 120px' }}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     const newValues = selectedValues.filter((_, idx) => idx !== i);
-                    handleFieldChange(fieldKey, { values: newValues });
+                    const newLinks = linkEnabled ? selectedLinks.filter((_, idx) => idx !== i) : [];
+                    handleFieldChange(fieldKey, { values: newValues, linkEnabled, links: newLinks });
                   }}
                   className={styles.removeBtn}
                 >
@@ -1137,16 +1250,22 @@ export default function DynamicRecordEditPage() {
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={() => {
-                handleFieldChange(fieldKey, { values: [...selectedValues, ''] });
-              }}
-              className={styles.addBtn}
-              style={{ marginTop: '8px' }}
-            >
-              Добавить значение
-            </button>
+            {selectedValues.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleFieldChange(fieldKey, {
+                    values: [...selectedValues, ''],
+                    linkEnabled,
+                    links: linkEnabled ? [...selectedLinks, ''] : selectedLinks,
+                  });
+                }}
+                className={styles.addBtn}
+                style={{ marginTop: '8px' }}
+              >
+                Добавить значение
+              </button>
+            )}
           </div>
         );
       }
@@ -1196,7 +1315,317 @@ export default function DynamicRecordEditPage() {
           </div>
         );
 
-      case 'table':
+      case 'table': {
+        let headers = [];
+        let rows = [];
+        if (value != null) {
+          if (typeof value === 'string') {
+            try {
+              const p = JSON.parse(value);
+              headers = Array.isArray(p?.headers) ? p.headers : [];
+              rows = Array.isArray(p?.rows) ? p.rows : [];
+            } catch (_) {}
+          } else if (typeof value === 'object') {
+            headers = Array.isArray(value.headers) ? value.headers : [];
+            rows = Array.isArray(value.rows) ? value.rows : [];
+          }
+        }
+        const colCount = Math.max(1, headers.length);
+        const safeHeaders = headers.length >= colCount ? headers : [...headers, ...Array(colCount - headers.length).fill('')];
+        const normalizeRow = (row) => {
+          const r = [...(row || [])];
+          while (r.length < colCount) r.push('');
+          return r.slice(0, colCount);
+        };
+        const safeRows = (rows || []).map(normalizeRow);
+        const addColumn = (atIndex) => {
+          const nextHeaders = [...safeHeaders.slice(0, atIndex), '', ...safeHeaders.slice(atIndex)];
+          const nextRows = safeRows.map(row => [...row.slice(0, atIndex), '', ...row.slice(atIndex)]);
+          handleFieldChange(fieldKey, { headers: nextHeaders, rows: nextRows });
+        };
+        const addRow = (atIndex) => {
+          const newRow = Array(colCount).fill('');
+          const nextRows = [...safeRows.slice(0, atIndex), newRow, ...safeRows.slice(atIndex)];
+          handleFieldChange(fieldKey, { headers: safeHeaders, rows: nextRows });
+        };
+        const removeColumn = (hIdx) => {
+          if (colCount <= 1) return;
+          const nextHeaders = safeHeaders.filter((_, i) => i !== hIdx);
+          const nextRows = safeRows.map(row => row.filter((_, i) => i !== hIdx));
+          handleFieldChange(fieldKey, { headers: nextHeaders, rows: nextRows });
+        };
+        const removeRow = (rIdx) => {
+          if (safeRows.length < 1) return;
+          const nextRows = safeRows.filter((_, i) => i !== rIdx);
+          handleFieldChange(fieldKey, { headers: safeHeaders, rows: nextRows });
+        };
+        const moveTableColumn = (fromCol, toCol) => {
+          if (fromCol === toCol) return;
+          const nextHeaders = [...safeHeaders];
+          const [removedH] = nextHeaders.splice(fromCol, 1);
+          nextHeaders.splice(toCol, 0, removedH);
+          const nextRows = safeRows.map(row => {
+            const r = [...row];
+            const [removedC] = r.splice(fromCol, 1);
+            r.splice(toCol, 0, removedC);
+            return r;
+          });
+          handleFieldChange(fieldKey, { headers: nextHeaders, rows: nextRows });
+        };
+        const moveTableRow = (fromRow, toRow) => {
+          if (fromRow === toRow) return;
+          const nextRows = [...safeRows];
+          const [removed] = nextRows.splice(fromRow, 1);
+          nextRows.splice(toRow, 0, removed);
+          handleFieldChange(fieldKey, { headers: safeHeaders, rows: nextRows });
+        };
+        return (
+          <div key={fieldKey} ref={(el) => { structureFieldRefs.current[fieldKey] = el; }} className={fieldClassName}>
+            <label className={styles.blockLabel}>{label}</label>
+            <div className={styles.tableWrap}>
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    {safeHeaders.flatMap((header, hIdx) => [
+                      <th
+                        key={`ins-${hIdx}`}
+                        className={styles.tableInsertCol}
+                        onClick={() => addColumn(hIdx)}
+                        title="Добавить столбец слева"
+                      >
+                        <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                      </th>,
+                      <th
+                        key={`h-${hIdx}`}
+                        className={`${styles.tableTh} ${dragOverTableColumn.fieldKey === fieldKey && dragOverTableColumn.colIndex === hIdx ? styles.tableThDragOver : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (draggedTableColumn.fieldKey === fieldKey && draggedTableColumn.colIndex !== hIdx) {
+                            setDragOverTableColumn({ fieldKey, colIndex: hIdx });
+                          }
+                        }}
+                        onDragLeave={() => setDragOverTableColumn(prev => (prev.fieldKey === fieldKey && prev.colIndex === hIdx ? { fieldKey: null, colIndex: null } : prev))}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          try {
+                            const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+                            if (payload?.kind !== 'table-col' || payload.fieldKey !== fieldKey) return;
+                            setDragOverTableColumn({ fieldKey: null, colIndex: null });
+                            moveTableColumn(payload.colIndex, hIdx);
+                          } catch (_) {}
+                        }}
+                      >
+                        <span className={styles.tableThInner}>
+                          {colCount > 1 && (
+                            <span
+                              className={styles.tableThGrip}
+                              draggable
+                              onDragStart={(e) => {
+                                e.stopPropagation();
+                                setDraggedTableColumn({ fieldKey, colIndex: hIdx });
+                                e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'table-col', fieldKey, colIndex: hIdx }));
+                                e.dataTransfer.effectAllowed = 'move';
+                              }}
+                              onDragEnd={() => setDraggedTableColumn({ fieldKey: null, colIndex: null })}
+                              title="Перетащите для изменения порядка столбца"
+                            >
+                              <GripVertical size={16} />
+                            </span>
+                          )}
+                          <AutoHeightTableTextarea
+                            value={header}
+                            onChange={(e) => {
+                              const next = [...safeHeaders];
+                              next[hIdx] = e.target.value;
+                              handleFieldChange(fieldKey, { headers: next, rows: safeRows });
+                            }}
+                            className={styles.tableCellTextarea}
+                            placeholder="Заголовок"
+                            rows={2}
+                          />
+                          {colCount > 1 && (
+                            <button
+                              type="button"
+                              className={styles.tableRemoveCol}
+                              onClick={(e) => { e.stopPropagation(); removeColumn(hIdx); }}
+                              title="Удалить столбец"
+                            >
+                              <XIcon size={14} />
+                            </button>
+                          )}
+                        </span>
+                      </th>,
+                    ])}
+                    <th
+                      key="ins-end"
+                      className={styles.tableInsertCol}
+                      onClick={() => addColumn(colCount)}
+                      title="Добавить столбец справа"
+                    >
+                      <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                    </th>
+                    {safeRows.length >= 1 && <th key="row-actions-head" className={styles.tableRowActions} />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {safeRows.length > 0 && (
+                    <tr
+                      key="ins-before"
+                      className={`${styles.tableInsertRowBetween} ${insertRowPlusPos.fieldKey === fieldKey && insertRowPlusPos.rowKey === 'ins-before' ? styles.tableInsertRowBetweenActive : ''}`}
+                      onClick={() => addRow(0)}
+                      title="Добавить строку сверху"
+                    >
+                      <td
+                        colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)}
+                        className={styles.tableInsertRowBetweenTd}
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setInsertRowPlusPos({ fieldKey, rowKey: 'ins-before', x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        }}
+                        onMouseMove={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setInsertRowPlusPos(prev => (prev.fieldKey === fieldKey && prev.rowKey === 'ins-before' ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : prev));
+                        }}
+                        onMouseLeave={() => setInsertRowPlusPos(prev => (prev.fieldKey === fieldKey && prev.rowKey === 'ins-before' ? { fieldKey: null, rowKey: null, x: 0, y: 0 } : prev))}
+                      >
+                        <span
+                          className={styles.tableInsertRowBetweenInner}
+                          style={insertRowPlusPos.fieldKey === fieldKey && insertRowPlusPos.rowKey === 'ins-before' ? { left: insertRowPlusPos.x, top: insertRowPlusPos.y } : undefined}
+                        >
+                          <Plus size={14} />
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                  {safeRows.length > 0 && safeRows.flatMap((row, rIdx) => [
+                      <tr
+                        key={rIdx}
+                        className={`${styles.tableDataRow} ${dragOverTableRow.fieldKey === fieldKey && dragOverTableRow.rowIndex === rIdx ? styles.tableDataRowDragOver : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (draggedTableRow.fieldKey === fieldKey && draggedTableRow.rowIndex !== rIdx) {
+                            setDragOverTableRow({ fieldKey, rowIndex: rIdx });
+                          }
+                        }}
+                        onDragLeave={() => setDragOverTableRow(prev => (prev.fieldKey === fieldKey && prev.rowIndex === rIdx ? { fieldKey: null, rowIndex: null } : prev))}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          try {
+                            const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+                            if (payload?.kind !== 'table-row' || payload.fieldKey !== fieldKey) return;
+                            setDragOverTableRow({ fieldKey: null, rowIndex: null });
+                            moveTableRow(payload.rowIndex, rIdx);
+                          } catch (_) {}
+                        }}
+                      >
+                        {row.flatMap((cell, cIdx) => [
+                        <td
+                          key={`ic-${cIdx}`}
+                          className={styles.tableInsertCol}
+                          onClick={() => addColumn(cIdx)}
+                          title="Добавить столбец"
+                        >
+                          <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                        </td>,
+                        <td key={cIdx} className={styles.tableTd}>
+                          <AutoHeightTableTextarea
+                            value={cell}
+                            onChange={(e) => {
+                              const nextRows = safeRows.map((r, i) => (i === rIdx ? [...r] : r));
+                              nextRows[rIdx][cIdx] = e.target.value;
+                              handleFieldChange(fieldKey, { headers: safeHeaders, rows: nextRows });
+                            }}
+                            className={styles.tableCellTextarea}
+                            rows={2}
+                          />
+                        </td>,
+                      ])}
+                      <td
+                        key="ic-end"
+                        className={styles.tableInsertCol}
+                        onClick={() => addColumn(colCount)}
+                        title="Добавить столбец справа"
+                      >
+                        <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                      </td>
+                        {safeRows.length >= 1 && (
+                          <td className={styles.tableRowActions}>
+                            {safeRows.length > 1 && (
+                              <span
+                                className={styles.tableRowGrip}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  setDraggedTableRow({ fieldKey, rowIndex: rIdx });
+                                  e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'table-row', fieldKey, rowIndex: rIdx }));
+                                  e.dataTransfer.effectAllowed = 'move';
+                                }}
+                                onDragEnd={() => setDraggedTableRow({ fieldKey: null, rowIndex: null })}
+                                title="Перетащите для изменения порядка строки"
+                              >
+                                <GripVertical size={16} />
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className={styles.tableRemoveRow}
+                              onClick={(e) => { e.stopPropagation(); removeRow(rIdx); }}
+                              title="Удалить строку"
+                            >
+                              <XIcon size={14} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>,
+                    ...(rIdx < safeRows.length - 1 ? [
+                      <tr
+                        key={`ins-${rIdx}`}
+                        className={`${styles.tableInsertRowBetween} ${insertRowPlusPos.fieldKey === fieldKey && insertRowPlusPos.rowKey === `ins-${rIdx}` ? styles.tableInsertRowBetweenActive : ''}`}
+                        onClick={() => addRow(rIdx + 1)}
+                        title="Добавить строку здесь"
+                      >
+                        <td
+                          colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)}
+                          className={styles.tableInsertRowBetweenTd}
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setInsertRowPlusPos({ fieldKey, rowKey: `ins-${rIdx}`, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                          }}
+                          onMouseMove={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setInsertRowPlusPos(prev => (prev.fieldKey === fieldKey && prev.rowKey === `ins-${rIdx}` ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : prev));
+                          }}
+                          onMouseLeave={() => setInsertRowPlusPos(prev => (prev.fieldKey === fieldKey && prev.rowKey === `ins-${rIdx}` ? { fieldKey: null, rowKey: null, x: 0, y: 0 } : prev))}
+                        >
+                          <span
+                            className={styles.tableInsertRowBetweenInner}
+                            style={insertRowPlusPos.fieldKey === fieldKey && insertRowPlusPos.rowKey === `ins-${rIdx}` ? { left: insertRowPlusPos.x, top: insertRowPlusPos.y } : undefined}
+                          >
+                            <Plus size={14} />
+                          </span>
+                        </td>
+                      </tr>,
+                    ] : []),
+                  ])}
+                  <tr
+                    key="add-row-bottom"
+                    className={styles.tableInsertRow}
+                    onClick={() => addRow(safeRows.length)}
+                    title="Добавить строку"
+                  >
+                    <td colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)} className={styles.tableInsertRowTd}>
+                      <span className={styles.tableInsertRowInner}><Plus size={16} /> Добавить строку</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
       case 'accordion':
       case 'tabs':
       case 'json':

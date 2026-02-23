@@ -27,6 +27,29 @@ function PendingImage({ file, alt = '', className }) {
   return <img src={url} alt={alt} className={className} />;
 }
 
+const TABLE_TEXTAREA_MAX_HEIGHT = 300;
+
+function AutoHeightTableTextarea({ value, onChange, className, placeholder, rows = 2, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, TABLE_TEXTAREA_MAX_HEIGHT)}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      className={className}
+      placeholder={placeholder}
+      rows={rows}
+      {...props}
+    />
+  );
+}
+
 const BLOCK_TYPES = [
   { type: 'heading', label: 'Заголовок', icon: Heading },
   { type: 'text', label: 'Текст', icon: Type },
@@ -40,7 +63,6 @@ const BLOCK_TYPES = [
   { type: 'image', label: 'Изображение', icon: Image },
   { type: 'gallery', label: 'Галерея', icon: Images },
   { type: 'file', label: 'Файл', icon: File },
-  { type: 'document', label: 'Документ', icon: File },
   { type: 'video', label: 'Видео', icon: Video },
   { type: 'audio', label: 'Аудио', icon: Music },
   { type: 'quote', label: 'Цитата', icon: Quote },
@@ -73,7 +95,7 @@ function createEmptyBlock(type) {
     case 'datetime':
       return { ...base, data: { value: '' } };
     case 'multiselect':
-      return { ...base, data: { values: [] } };
+      return { ...base, data: { values: [], linkEnabled: false, links: [] } };
     case 'url':
       return { ...base, data: { value: '' } };
     case 'contact':
@@ -91,7 +113,13 @@ function createEmptyBlock(type) {
     case 'list':
       return { ...base, data: { items: [], ordered: false } };
     case 'table':
-      return { ...base, data: { headers: [], rows: [] } };
+      return {
+        ...base,
+        data: {
+          headers: ['', '', ''],
+          rows: [['', '', '']],
+        },
+      };
     case 'separator':
       return { ...base, data: {} };
     case 'button':
@@ -124,8 +152,6 @@ function createEmptyBlock(type) {
       return { ...base, data: { resourceSlug: '', resourceLabel: '', selectedIds: [], selectedItems: [] } };
     case 'audio':
       return { ...base, data: { url: '' } };
-    case 'document':
-      return { ...base, data: { url: '', title: '' } };
     case 'json':
       return { ...base, data: { value: '{}' } };
     default:
@@ -658,6 +684,59 @@ export default function NewsBlockEditor({
     updateBlock(blockIndex, { data: { ...block.data, items } });
   };
 
+  const moveTabsItem = (blockIndex, itemIndex, direction) => {
+    const block = sortedBlocks[blockIndex];
+    if (!block) return;
+    const tabs = [...(block.data?.tabs || [])];
+    const targetIndex = itemIndex + direction;
+    if (targetIndex < 0 || targetIndex >= tabs.length) return;
+    [tabs[itemIndex], tabs[targetIndex]] = [tabs[targetIndex], tabs[itemIndex]];
+    updateBlock(blockIndex, { data: { ...block.data, tabs } });
+  };
+
+  const [draggedTabsItem, setDraggedTabsItem] = useState(null);
+  const [dragOverTabsItem, setDragOverTabsItem] = useState(null);
+
+  const moveTabsItemTo = (blockIndex, fromIndex, toIndex) => {
+    const block = sortedBlocks[blockIndex];
+    if (!block) return;
+    const tabs = [...(block.data?.tabs || [])];
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= tabs.length || toIndex >= tabs.length || fromIndex === toIndex) return;
+    const [removed] = tabs.splice(fromIndex, 1);
+    tabs.splice(toIndex, 0, removed);
+    updateBlock(blockIndex, { data: { ...block.data, tabs } });
+  };
+
+  const moveTableColumn = (blockIndex, fromCol, toCol) => {
+    if (fromCol === toCol) return;
+    const block = sortedBlocks[blockIndex];
+    if (!block?.data) return;
+    const headers = [...(block.data.headers || [])];
+    const rows = (block.data.rows || []).map(row => [...(row || [])]);
+    const colCount = Math.max(headers.length, ...rows.map(r => r.length));
+    while (headers.length < colCount) headers.push('');
+    rows.forEach(r => { while (r.length < colCount) r.push(''); });
+    if (fromCol < 0 || toCol < 0 || fromCol >= colCount || toCol >= colCount) return;
+    const [removedH] = headers.splice(fromCol, 1);
+    headers.splice(toCol, 0, removedH);
+    rows.forEach(r => {
+      const [removedC] = r.splice(fromCol, 1);
+      r.splice(toCol, 0, removedC);
+    });
+    updateBlock(blockIndex, { data: { ...block.data, headers, rows } });
+  };
+
+  const moveTableRow = (blockIndex, fromRow, toRow) => {
+    if (fromRow === toRow) return;
+    const block = sortedBlocks[blockIndex];
+    if (!block?.data) return;
+    const rows = [...(block.data.rows || [])];
+    if (fromRow < 0 || toRow < 0 || fromRow >= rows.length || toRow >= rows.length) return;
+    const [removed] = rows.splice(fromRow, 1);
+    rows.splice(toRow, 0, removed);
+    updateBlock(blockIndex, { data: { ...block.data, rows } });
+  };
+
   const moveRelatedEntity = (blockIndex, entityIndex, direction) => {
     const block = sortedBlocks[blockIndex];
     if (!block) return;
@@ -831,6 +910,11 @@ export default function NewsBlockEditor({
 
   const [draggedGalleryImage, setDraggedGalleryImage] = useState(null);
   const [dragOverGalleryImage, setDragOverGalleryImage] = useState(null);
+  const [insertRowPlusPos, setInsertRowPlusPos] = useState({ blockIndex: null, rowKey: null, x: 0, y: 0 });
+  const [draggedTableColumn, setDraggedTableColumn] = useState({ blockIndex: null, colIndex: null });
+  const [dragOverTableColumn, setDragOverTableColumn] = useState({ blockIndex: null, colIndex: null });
+  const [draggedTableRow, setDraggedTableRow] = useState({ blockIndex: null, rowIndex: null });
+  const [dragOverTableRow, setDragOverTableRow] = useState({ blockIndex: null, rowIndex: null });
 
   const moveGalleryImageTo = (blockIndex, fromIndex, toIndex) => {
     const block = sortedBlocks[blockIndex];
@@ -888,6 +972,24 @@ export default function NewsBlockEditor({
   };
 
   const getBlockImagePending = (block) => pendingBlockFiles[block?.id]?.url;
+
+  const handleFileBlockSelect = (e, index) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const block = sortedBlocks[index];
+    if (!block) return;
+    onPendingBlockFilesChange?.(block.id, { ...pendingBlockFiles[block.id], documentFile: file });
+  };
+
+  const getBlockFilePending = (block) => pendingBlockFiles[block?.id]?.documentFile;
+
+  const clearBlockFile = (blockIndex) => {
+    const block = sortedBlocks[blockIndex];
+    if (!block) return;
+    onPendingBlockFilesChange?.(block.id, null);
+    updateBlock(blockIndex, { data: { title: '', url: '' } });
+  };
 
   return (
     <div className={styles.wrapper}>
@@ -1056,8 +1158,44 @@ export default function NewsBlockEditor({
               {block.type === 'multiselect' && (
                 <>
                   <label className={styles.blockLabel}>Выпадающий список</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <label className={styles.visibilityToggle} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(block.data?.linkEnabled)}
+                        onChange={(e) => {
+                          const linkEnabled = e.target.checked;
+                          const values = block.data?.values || [];
+                          const links = linkEnabled ? (block.data?.links || []).slice(0, values.length).concat(values.slice((block.data?.links || []).length).fill('')) : [];
+                          updateBlock(index, { data: { ...block.data, linkEnabled, links } });
+                        }}
+                      />
+                      <span className={styles.visibilitySwitch} />
+                      <span className={styles.visibilityLabel}>Нужна ссылка при выборе</span>
+                    </label>
+                    {(block.data?.values || []).length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const values = block.data?.values || [];
+                          const links = block.data?.links || [];
+                          updateBlock(index, {
+                            data: {
+                              ...block.data,
+                              values: [...values, ''],
+                              links: block.data?.linkEnabled ? [...links, ''] : links,
+                            },
+                          });
+                        }}
+                        className={styles.addListItemBtn}
+                        style={{ marginTop: 8 }}
+                      >
+                        + Добавить значение
+                      </button>
+                    )}
+                  </div>
                   {(block.data?.values || []).map((item, itemIdx) => (
-                    <div key={itemIdx} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <div key={itemIdx} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                       <input
                         type="text"
                         value={item}
@@ -1068,12 +1206,29 @@ export default function NewsBlockEditor({
                         }}
                         className={styles.blockInput}
                         placeholder={`Значение ${itemIdx + 1}`}
+                        style={{ flex: '1 1 120px' }}
                       />
+                      {block.data?.linkEnabled && (
+                        <input
+                          type="url"
+                          value={(block.data?.links || [])[itemIdx] ?? ''}
+                          onChange={(e) => {
+                            const links = [...(block.data?.links || [])];
+                            while (links.length < itemIdx + 1) links.push('');
+                            links[itemIdx] = e.target.value;
+                            updateBlock(index, { data: { ...block.data, links } });
+                          }}
+                          className={styles.blockInput}
+                          placeholder="Ссылка"
+                          style={{ flex: '1 1 120px' }}
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => {
                           const values = (block.data?.values || []).filter((_, i) => i !== itemIdx);
-                          updateBlock(index, { data: { ...block.data, values } });
+                          const links = (block.data?.links || []).filter((_, i) => i !== itemIdx);
+                          updateBlock(index, { data: { ...block.data, values, links } });
                         }}
                         className={styles.listItemDeleteBtn}
                         aria-label="Удалить значение"
@@ -1082,16 +1237,25 @@ export default function NewsBlockEditor({
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const values = block.data?.values || [];
-                      updateBlock(index, { data: { ...block.data, values: [...values, ''] } });
-                    }}
-                    className={styles.addListItemBtn}
-                  >
-                    + Добавить значение
-                  </button>
+                  {(block.data?.values || []).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const values = block.data?.values || [];
+                        const links = block.data?.links || [];
+                        updateBlock(index, {
+                          data: {
+                            ...block.data,
+                            values: [...values, ''],
+                            links: block.data?.linkEnabled ? [...links, ''] : links,
+                          },
+                        });
+                      }}
+                      className={styles.addListItemBtn}
+                    >
+                      + Добавить значение
+                    </button>
+                  )}
                 </>
               )}
 
@@ -1623,45 +1787,46 @@ export default function NewsBlockEditor({
                 </>
               )}
 
-              {block.type === 'document' && (
-                <>
-                  <label className={styles.blockLabel}>Документ/PDF</label>
-                  <input
-                    type="text"
-                    value={block.data?.title ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, title: e.target.value } })}
-                    className={styles.blockInput}
-                    placeholder="Название документа"
-                    style={{ marginBottom: 12 }}
-                  />
-                  <input
-                    type="text"
-                    value={block.data?.url ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, url: e.target.value } })}
-                    className={styles.blockInput}
-                    placeholder="URL документа (PDF, DOC, DOCX и т.д.)"
-                  />
-                </>
-              )}
-
               {block.type === 'file' && (
                 <>
                   <label className={styles.blockLabel}>Файл</label>
                   <input
-                    type="text"
-                    value={block.data?.title ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, title: e.target.value } })}
-                    className={styles.blockInput}
-                    placeholder="Название файла"
-                    style={{ marginBottom: 12 }}
+                    type="file"
+                    onChange={(e) => handleFileBlockSelect(e, index)}
+                    style={{ display: 'none' }}
+                    id={`block-file-${block.id}`}
                   />
-                  <input
-                    type="text"
-                    value={block.data?.url ?? ''}
-                    onChange={(e) => updateBlock(index, { data: { ...block.data, url: e.target.value } })}
-                    className={styles.blockInput}
-                    placeholder="URL файла"
-                  />
+                  {(block.data?.url || getBlockFilePending(block)) ? (
+                    <div className={styles.imagePreview}>
+                      <div className={styles.filePreviewName}>
+                        {getBlockFilePending(block)
+                          ? getBlockFilePending(block).name
+                          : (block.data?.title || block.data?.url || 'Файл')}
+                      </div>
+                      <div className={styles.imageActions}>
+                        <label htmlFor={`block-file-${block.id}`} className={styles.replaceBtn}>
+                          Заменить
+                        </label>
+                        <button type="button" onClick={() => clearBlockFile(index)} className={styles.removeBtn}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label htmlFor={`block-file-${block.id}`} className={styles.uploadArea}>
+                      Загрузить файл
+                    </label>
+                  )}
+                  {block.data?.url && !getBlockFilePending(block) && (
+                    <input
+                      type="text"
+                      value={block.data?.title ?? ''}
+                      onChange={(e) => updateBlock(index, { data: { ...block.data, title: e.target.value } })}
+                      className={styles.blockInput}
+                      placeholder="Название файла (подпись к ссылке)"
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
                 </>
               )}
 
@@ -1960,107 +2125,286 @@ export default function NewsBlockEditor({
               )}
 
               {/* Блоки с коллекциями */}
-              {block.type === 'table' && (
-                <>
-                  <label className={styles.blockLabel}>Таблица</label>
-                  <div style={{ marginBottom: 12 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const headers = block.data?.headers || [];
-                        updateBlock(index, { data: { ...block.data, headers: [...headers, ''] } });
-                      }}
-                      className={styles.blockInput}
-                      style={{ marginRight: 8, cursor: 'pointer', background: '#f1f5f9' }}
-                    >
-                      + Добавить столбец
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const rows = block.data?.rows || [];
-                        const headers = block.data?.headers || [];
-                        updateBlock(index, { data: { ...block.data, rows: [...rows, headers.map(() => '')] } });
-                      }}
-                      className={styles.blockInput}
-                      style={{ cursor: 'pointer', background: '#f1f5f9' }}
-                    >
-                      + Добавить строку
-                    </button>
-                  </div>
-                  {block.data?.headers && block.data.headers.length > 0 && (
-                    <div style={{ overflowX: 'auto', marginBottom: 12 }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0' }}>
+              {block.type === 'table' && (() => {
+                const headers = block.data?.headers || [];
+                const rows = block.data?.rows || [];
+                const colCount = Math.max(1, headers.length);
+                const safeHeaders = headers.length >= colCount ? headers : [...headers, ...Array(colCount - headers.length).fill('')];
+                const normalizeRow = (row) => {
+                  const r = [...(row || [])];
+                  while (r.length < colCount) r.push('');
+                  return r.slice(0, colCount);
+                };
+                const safeRows = (rows || []).map(normalizeRow);
+                const addColumn = (atIndex) => {
+                  const nextHeaders = [...safeHeaders.slice(0, atIndex), '', ...safeHeaders.slice(atIndex)];
+                  const nextRows = safeRows.map(row => [...row.slice(0, atIndex), '', ...row.slice(atIndex)]);
+                  updateBlock(index, { data: { ...block.data, headers: nextHeaders, rows: nextRows } });
+                };
+                const addRow = (atIndex) => {
+                  const newRow = Array(colCount).fill('');
+                  const nextRows = [...safeRows.slice(0, atIndex), newRow, ...safeRows.slice(atIndex)];
+                  updateBlock(index, { data: { ...block.data, headers: safeHeaders, rows: nextRows } });
+                };
+                const removeColumn = (hIdx) => {
+                  if (colCount <= 1) return;
+                  const nextHeaders = safeHeaders.filter((_, i) => i !== hIdx);
+                  const nextRows = safeRows.map(row => row.filter((_, i) => i !== hIdx));
+                  updateBlock(index, { data: { ...block.data, headers: nextHeaders, rows: nextRows } });
+                };
+                const removeRow = (rIdx) => {
+                  if (safeRows.length < 1) return;
+                  const nextRows = safeRows.filter((_, i) => i !== rIdx);
+                  updateBlock(index, { data: { ...block.data, rows: nextRows } });
+                };
+                return (
+                  <>
+                    <label className={styles.blockLabel}>Таблица</label>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.dataTable}>
                         <thead>
                           <tr>
-                            {block.data.headers.map((header, hIdx) => (
-                              <th key={hIdx} style={{ padding: 8, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                                <input
-                                  type="text"
-                                  value={header}
-                                  onChange={(e) => {
-                                    const headers = [...block.data.headers];
-                                    headers[hIdx] = e.target.value;
-                                    updateBlock(index, { data: { ...block.data, headers } });
-                                  }}
-                                  className={styles.blockInput}
-                                  style={{ margin: 0, padding: '4px 8px' }}
-                                  placeholder="Заголовок"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const headers = block.data.headers.filter((_, i) => i !== hIdx);
-                                    const rows = (block.data.rows || []).map(row => row.filter((_, i) => i !== hIdx));
-                                    updateBlock(index, { data: { ...block.data, headers, rows } });
-                                  }}
-                                  style={{ marginLeft: 4, padding: '2px 6px', fontSize: '0.8rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                                >
-                                  ×
-                                </button>
-                              </th>
-                            ))}
+                            {safeHeaders.flatMap((header, hIdx) => [
+                              <th
+                                key={`ins-${hIdx}`}
+                                className={styles.tableInsertCol}
+                                onClick={() => addColumn(hIdx)}
+                                title="Добавить столбец слева"
+                              >
+                                <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                              </th>,
+                              <th
+                                key={`h-${hIdx}`}
+                                className={`${styles.tableTh} ${dragOverTableColumn.blockIndex === index && dragOverTableColumn.colIndex === hIdx ? styles.tableThDragOver : ''}`}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (draggedTableColumn.blockIndex === index && draggedTableColumn.colIndex !== hIdx) {
+                                    setDragOverTableColumn({ blockIndex: index, colIndex: hIdx });
+                                  }
+                                }}
+                                onDragLeave={() => setDragOverTableColumn(prev => (prev.blockIndex === index && prev.colIndex === hIdx ? { blockIndex: null, colIndex: null } : prev))}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+                                    if (payload?.kind !== 'table-col' || payload.blockIndex !== index) return;
+                                    setDragOverTableColumn({ blockIndex: null, colIndex: null });
+                                    moveTableColumn(index, payload.colIndex, hIdx);
+                                  } catch (_) {}
+                                }}
+                              >
+                                <span className={styles.tableThInner}>
+                                  {colCount > 1 && (
+                                    <span
+                                      className={styles.tableThGrip}
+                                      draggable
+                                      onDragStart={(e) => {
+                                        e.stopPropagation();
+                                        setDraggedTableColumn({ blockIndex: index, colIndex: hIdx });
+                                        e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'table-col', blockIndex: index, colIndex: hIdx }));
+                                        e.dataTransfer.effectAllowed = 'move';
+                                      }}
+                                      onDragEnd={() => setDraggedTableColumn({ blockIndex: null, colIndex: null })}
+                                      title="Перетащите для изменения порядка столбца"
+                                    >
+                                      <GripVertical size={16} />
+                                    </span>
+                                  )}
+                                  <AutoHeightTableTextarea
+                                    value={header}
+                                    onChange={(e) => {
+                                      const next = [...safeHeaders];
+                                      next[hIdx] = e.target.value;
+                                      updateBlock(index, { data: { ...block.data, headers: next } });
+                                    }}
+                                    className={styles.tableCellTextarea}
+                                    placeholder="Заголовок"
+                                    rows={2}
+                                  />
+                                  {colCount > 1 && (
+                                    <button
+                                      type="button"
+                                      className={styles.tableRemoveCol}
+                                      onClick={(e) => { e.stopPropagation(); removeColumn(hIdx); }}
+                                      title="Удалить столбец"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  )}
+                                </span>
+                              </th>,
+                            ])}
+                            <th
+                              key="ins-end"
+                              className={styles.tableInsertCol}
+                              onClick={() => addColumn(colCount)}
+                              title="Добавить столбец справа"
+                            >
+                              <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                            </th>
+                            {safeRows.length >= 1 && <th key="row-actions-head" className={styles.tableRowActions} />}
                           </tr>
                         </thead>
                         <tbody>
-                          {(block.data?.rows || []).map((row, rIdx) => (
-                            <tr key={rIdx}>
-                              {row.map((cell, cIdx) => (
-                                <td key={cIdx} style={{ padding: 8, border: '1px solid #e2e8f0' }}>
-                                  <input
-                                    type="text"
-                                    value={cell}
-                                    onChange={(e) => {
-                                      const rows = [...(block.data.rows || [])];
-                                      rows[rIdx] = [...rows[rIdx]];
-                                      rows[rIdx][cIdx] = e.target.value;
-                                      updateBlock(index, { data: { ...block.data, rows } });
-                                    }}
-                                    className={styles.blockInput}
-                                    style={{ margin: 0, padding: '4px 8px' }}
-                                  />
-                                </td>
-                              ))}
-                              <td style={{ padding: 8, border: '1px solid #e2e8f0' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const rows = (block.data.rows || []).filter((_, i) => i !== rIdx);
-                                    updateBlock(index, { data: { ...block.data, rows } });
-                                  }}
-                                  style={{ padding: '2px 6px', fontSize: '0.8rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                          {safeRows.length > 0 && (
+                            <tr
+                              key="ins-before"
+                              className={`${styles.tableInsertRowBetween} ${insertRowPlusPos.blockIndex === index && insertRowPlusPos.rowKey === 'ins-before' ? styles.tableInsertRowBetweenActive : ''}`}
+                              onClick={() => addRow(0)}
+                              title="Добавить строку сверху"
+                            >
+                              <td
+                                colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)}
+                                className={styles.tableInsertRowBetweenTd}
+                                onMouseEnter={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setInsertRowPlusPos({ blockIndex: index, rowKey: 'ins-before', x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                }}
+                                onMouseMove={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setInsertRowPlusPos(prev => (prev.blockIndex === index && prev.rowKey === 'ins-before' ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : prev));
+                                }}
+                                onMouseLeave={() => setInsertRowPlusPos(prev => (prev.blockIndex === index && prev.rowKey === 'ins-before' ? { blockIndex: null, rowKey: null, x: 0, y: 0 } : prev))}
+                              >
+                                <span
+                                  className={styles.tableInsertRowBetweenInner}
+                                  style={insertRowPlusPos.blockIndex === index && insertRowPlusPos.rowKey === 'ins-before' ? { left: insertRowPlusPos.x, top: insertRowPlusPos.y } : undefined}
                                 >
-                                  ×
-                                </button>
+                                  <Plus size={14} />
+                                </span>
                               </td>
                             </tr>
-                          ))}
+                          )}
+                          {safeRows.length === 0 ? null : (
+                            safeRows.flatMap((row, rIdx) => [
+                              <tr
+                                key={rIdx}
+                                className={`${styles.tableDataRow} ${dragOverTableRow.blockIndex === index && dragOverTableRow.rowIndex === rIdx ? styles.tableDataRowDragOver : ''}`}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (draggedTableRow.blockIndex === index && draggedTableRow.rowIndex !== rIdx) {
+                                    setDragOverTableRow({ blockIndex: index, rowIndex: rIdx });
+                                  }
+                                }}
+                                onDragLeave={() => setDragOverTableRow(prev => (prev.blockIndex === index && prev.rowIndex === rIdx ? { blockIndex: null, rowIndex: null } : prev))}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  try {
+                                    const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+                                    if (payload?.kind !== 'table-row' || payload.blockIndex !== index) return;
+                                    setDragOverTableRow({ blockIndex: null, rowIndex: null });
+                                    moveTableRow(index, payload.rowIndex, rIdx);
+                                  } catch (_) {}
+                                }}
+                              >
+                                {row.flatMap((cell, cIdx) => [
+                                  <td
+                                    key={`ic-${cIdx}`}
+                                    className={styles.tableInsertCol}
+                                    onClick={() => addColumn(cIdx)}
+                                    title="Добавить столбец"
+                                  >
+                                    <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                                  </td>,
+                                  <td key={cIdx} className={styles.tableTd}>
+                                    <AutoHeightTableTextarea
+                                      value={cell}
+                                      onChange={(e) => {
+                                        const nextRows = safeRows.map((r, i) => (i === rIdx ? [...r] : r));
+                                        nextRows[rIdx][cIdx] = e.target.value;
+                                        updateBlock(index, { data: { ...block.data, rows: nextRows } });
+                                      }}
+                                      className={styles.tableCellTextarea}
+                                      rows={2}
+                                    />
+                                  </td>,
+                                ])}
+                                <td
+                                  key="ic-end"
+                                  className={styles.tableInsertCol}
+                                  onClick={() => addColumn(colCount)}
+                                  title="Добавить столбец справа"
+                                >
+                                  <span className={styles.tableInsertColInner}><Plus size={14} /></span>
+                                </td>
+                                {safeRows.length >= 1 && (
+                                  <td className={styles.tableRowActions}>
+                                    {safeRows.length > 1 && (
+                                      <span
+                                        className={styles.tableRowGrip}
+                                        draggable
+                                        onDragStart={(e) => {
+                                          e.stopPropagation();
+                                          setDraggedTableRow({ blockIndex: index, rowIndex: rIdx });
+                                          e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'table-row', blockIndex: index, rowIndex: rIdx }));
+                                          e.dataTransfer.effectAllowed = 'move';
+                                        }}
+                                        onDragEnd={() => setDraggedTableRow({ blockIndex: null, rowIndex: null })}
+                                        title="Перетащите для изменения порядка строки"
+                                      >
+                                        <GripVertical size={16} />
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className={styles.tableRemoveRow}
+                                      onClick={(e) => { e.stopPropagation(); removeRow(rIdx); }}
+                                      title="Удалить строку"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>,
+                              ...(rIdx < safeRows.length - 1 ? [
+                                <tr
+                                  key={`ins-${rIdx}`}
+                                  className={`${styles.tableInsertRowBetween} ${insertRowPlusPos.blockIndex === index && insertRowPlusPos.rowKey === `ins-${rIdx}` ? styles.tableInsertRowBetweenActive : ''}`}
+                                  onClick={() => addRow(rIdx + 1)}
+                                  title="Добавить строку здесь"
+                                >
+                                  <td
+                                    colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)}
+                                    className={styles.tableInsertRowBetweenTd}
+                                    onMouseEnter={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setInsertRowPlusPos({ blockIndex: index, rowKey: `ins-${rIdx}`, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                    }}
+                                    onMouseMove={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setInsertRowPlusPos(prev => (prev.blockIndex === index && prev.rowKey === `ins-${rIdx}` ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : prev));
+                                    }}
+                                    onMouseLeave={() => setInsertRowPlusPos(prev => (prev.blockIndex === index && prev.rowKey === `ins-${rIdx}` ? { blockIndex: null, rowKey: null, x: 0, y: 0 } : prev))}
+                                  >
+                                    <span
+                                      className={styles.tableInsertRowBetweenInner}
+                                      style={insertRowPlusPos.blockIndex === index && insertRowPlusPos.rowKey === `ins-${rIdx}` ? { left: insertRowPlusPos.x, top: insertRowPlusPos.y } : undefined}
+                                    >
+                                      <Plus size={14} />
+                                    </span>
+                                  </td>
+                                </tr>,
+                              ] : []),
+                            ])
+                          )}
+                          <tr
+                            key="add-row-bottom"
+                            className={styles.tableInsertRow}
+                            onClick={() => addRow(safeRows.length)}
+                            title="Добавить строку"
+                          >
+                            <td colSpan={2 * colCount + 1 + (safeRows.length >= 1 ? 1 : 0)} className={styles.tableInsertRowTd}>
+                              <span className={styles.tableInsertRowInner}><Plus size={16} /> Добавить строку</span>
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
-                  )}
-                </>
-              )}
+                  </>
+                );
+              })()}
 
               {block.type === 'accordion' && (
                 <>
@@ -2193,53 +2537,125 @@ export default function NewsBlockEditor({
               {block.type === 'tabs' && (
                 <>
                   <label className={styles.blockLabel}>Табы</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const tabs = block.data?.tabs || [];
-                      updateBlock(index, { data: { ...block.data, tabs: [...tabs, { label: '', content: '' }] } });
-                    }}
-                    className={styles.blockInput}
-                    style={{ marginBottom: 12, cursor: 'pointer', background: '#f1f5f9' }}
-                  >
-                    + Добавить вкладку
-                  </button>
                   {(block.data?.tabs || []).map((tab, tabIdx) => (
-                    <div key={tabIdx} style={{ marginBottom: 12, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                      <input
-                        type="text"
-                        value={tab.label || ''}
-                        onChange={(e) => {
-                          const tabs = [...(block.data.tabs || [])];
-                          tabs[tabIdx] = { ...tabs[tabIdx], label: e.target.value };
-                          updateBlock(index, { data: { ...block.data, tabs } });
-                        }}
-                        className={styles.blockInput}
-                        placeholder="Название вкладки"
-                        style={{ marginBottom: 8 }}
-                      />
-                      <RichTextEditor
-                        value={tab.content || ''}
-                        onChange={(v) => {
-                          const tabs = [...(block.data.tabs || [])];
-                          tabs[tabIdx] = { ...tabs[tabIdx], content: v };
-                          updateBlock(index, { data: { ...block.data, tabs } });
-                        }}
-                        placeholder="Содержимое вкладки..."
-                        minHeight={100}
-                      />
+                    <div
+                      key={tabIdx}
+                      className={`${styles.listItemRow} ${draggedTabsItem?.blockIndex === index && draggedTabsItem?.itemIndex === tabIdx ? styles.listItemDragging : ''} ${dragOverTabsItem?.blockIndex === index && dragOverTabsItem?.itemIndex === tabIdx ? styles.listItemDragOver : ''}`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDragOverTabsItem({ blockIndex: index, itemIndex: tabIdx });
+                      }}
+                      onDragLeave={() => {
+                        setDragOverTabsItem((prev) => (prev?.blockIndex === index && prev?.itemIndex === tabIdx ? null : prev));
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        try {
+                          const payload = JSON.parse(e.dataTransfer.getData('text/plain'));
+                          if (payload?.kind !== 'tabs-item' || payload.blockIndex !== index) return;
+                          moveTabsItemTo(index, payload.itemIndex, tabIdx);
+                        } catch (_) {}
+                        finally {
+                          setDragOverTabsItem(null);
+                          setDraggedTabsItem(null);
+                        }
+                      }}
+                    >
+                      <div className={styles.listItemControls}>
+                        <div
+                          className={styles.listItemDragHandle}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedTabsItem({ blockIndex: index, itemIndex: tabIdx });
+                            e.dataTransfer.setData('text/plain', JSON.stringify({
+                              kind: 'tabs-item',
+                              blockIndex: index,
+                              itemIndex: tabIdx,
+                            }));
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragEnd={() => {
+                            setDraggedTabsItem(null);
+                            setDragOverTabsItem(null);
+                          }}
+                          title="Перетащите для изменения порядка"
+                        >
+                          <GripVertical size={16} />
+                        </div>
+                        <div className={styles.moveButtons}>
+                          <button
+                            type="button"
+                            onClick={() => moveTabsItem(index, tabIdx, -1)}
+                            disabled={tabIdx === 0}
+                            className={styles.moveBtn}
+                            aria-label="Поднять вкладку выше"
+                            title="Поднять вкладку выше"
+                          >
+                            <ChevronUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveTabsItem(index, tabIdx, 1)}
+                            disabled={tabIdx === (block.data?.tabs || []).length - 1}
+                            className={styles.moveBtn}
+                            aria-label="Опустить вкладку ниже"
+                            title="Опустить вкладку ниже"
+                          >
+                            <ChevronDown size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className={styles.accordionItemContent}>
+                        <input
+                          type="text"
+                          value={tab.label || ''}
+                          onChange={(e) => {
+                            const tabs = [...(block.data.tabs || [])];
+                            tabs[tabIdx] = { ...tabs[tabIdx], label: e.target.value };
+                            updateBlock(index, { data: { ...block.data, tabs } });
+                          }}
+                          className={styles.blockInput}
+                          placeholder="Название вкладки"
+                          style={{ marginBottom: 8 }}
+                        />
+                        <RichTextEditor
+                          value={tab.content || ''}
+                          onChange={(v) => {
+                            const tabs = [...(block.data.tabs || [])];
+                            tabs[tabIdx] = { ...tabs[tabIdx], content: v };
+                            updateBlock(index, { data: { ...block.data, tabs } });
+                          }}
+                          placeholder="Содержимое вкладки..."
+                          minHeight={100}
+                        />
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => {
                           const tabs = (block.data.tabs || []).filter((_, i) => i !== tabIdx);
                           updateBlock(index, { data: { ...block.data, tabs } });
                         }}
-                        style={{ marginTop: 8, padding: '4px 8px', fontSize: '0.85rem', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        className={styles.listItemDeleteBtn}
+                        aria-label="Удалить вкладку"
+                        title="Удалить вкладку"
                       >
-                        Удалить вкладку
+                        <X size={16} />
                       </button>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tabs = block.data?.tabs || [];
+                      updateBlock(index, { data: { ...block.data, tabs: [...tabs, { label: '', content: '' }] } });
+                    }}
+                    className={styles.addListItemBtn}
+                  >
+                    + Добавить вкладку
+                  </button>
                 </>
               )}
 
@@ -3235,4 +3651,4 @@ export default function NewsBlockEditor({
   );
 }
 
-export { slugFromText, BLOCK_TYPES, createEmptyBlock };
+export { slugFromText, BLOCK_TYPES, createEmptyBlock, AutoHeightTableTextarea };
