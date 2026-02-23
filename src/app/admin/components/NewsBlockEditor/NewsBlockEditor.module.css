@@ -124,7 +124,7 @@
   display: grid;
   grid-template-rows: repeat(6, 1fr);
   grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, auto);
+  grid-auto-columns: minmax(320px, auto);
   gap: 2px;
   max-height: calc(6 * 48px + 16px);
   overflow-y: auto;
