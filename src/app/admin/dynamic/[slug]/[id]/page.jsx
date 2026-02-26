@@ -34,6 +34,7 @@ function buildStructureFields(raw) {
       type: f.type || 'text',
       order: f.order ?? i,
       label: f.label ?? '',
+      showInCreateForm: f.showInCreateForm !== false,
     }))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -464,7 +465,10 @@ export default function DynamicRecordEditPage() {
     order: index,
     label: getBlockLabel(field),
     data: toEditorBlockData(field.type, recordData[field.fieldKey]),
-  }));
+  })).filter((block) => {
+    const field = structureFields.find((item) => structureFieldToBlockId(item) === block.id);
+    return field?.showInCreateForm !== false;
+  });
 
   const handleStructureBlocksChange = (blocks) => {
     const byId = new Map((Array.isArray(blocks) ? blocks : []).map((block) => [block.id, block]));
@@ -803,10 +807,21 @@ export default function DynamicRecordEditPage() {
       const blocksToSave = Array.isArray(additionalBlocksRef.current) ? additionalBlocksRef.current : [];
       const pendingFilesToSave = pendingFilesRef.current && typeof pendingFilesRef.current === 'object' ? pendingFilesRef.current : {};
       const publishedToSave = Boolean(isPublishedRef.current);
+      const hasPendingStructureImage = (field) => {
+        if (!field || field.type !== 'image') return false;
+        const blockId = structureFieldToBlockId(field);
+        const pending = pendingFilesToSave?.[blockId]?.url;
+        return pending instanceof Blob;
+      };
 
       // Валидация обязательного заполнения полей структуры
-      const unfilledStructureFields = fieldsToSave
-        .filter((field) => !hasFilledValue(field.type, recordDataToSave[field.fieldKey]));
+      const requiredStructureFields = fieldsToSave.filter((field) => field.showInCreateForm !== false);
+      const unfilledStructureFields = requiredStructureFields
+        .filter((field) => {
+          if (hasFilledValue(field.type, recordDataToSave[field.fieldKey])) return false;
+          if (hasPendingStructureImage(field)) return false;
+          return true;
+        });
       if (unfilledStructureFields.length > 0) {
         const invalidKeys = unfilledStructureFields.map((field) => field.fieldKey);
         setInvalidStructureFieldKeys(invalidKeys);
@@ -881,23 +896,17 @@ export default function DynamicRecordEditPage() {
       const dataToSave = {};
       
       // Обрабатываем каждое поле структуры
-      for (const field of fieldsToSave) {
+      for (const field of requiredStructureFields) {
         const fieldKey = field.fieldKey;
         const value = recordDataToSave[fieldKey];
         
-        if (field.type === 'image' && value && typeof value === 'object') {
-          if (value.type === 'url') {
-            // Уже загружено - сохраняем URL
-            dataToSave[fieldKey] = value.value;
-          } else if (value.type === 'file' && value.value) {
-            // Нужно загрузить файл
+        if (field.type === 'image') {
+          const blockId = structureFieldToBlockId(field);
+          const pendingImage = pendingFilesToSave?.[blockId]?.url;
+          if (pendingImage instanceof Blob) {
             try {
-              const uploadedUrl = await uploadFileAndGetUrl(value.value);
+              const uploadedUrl = await uploadFileAndGetUrl(pendingImage);
               dataToSave[fieldKey] = uploadedUrl;
-              // Освобождаем память от preview
-              if (value.preview) {
-                URL.revokeObjectURL(value.preview);
-              }
             } catch (error) {
               console.error('Ошибка загрузки изображения:', error);
               setInfoModal({
@@ -906,6 +915,31 @@ export default function DynamicRecordEditPage() {
               });
               setIsSaving(false);
               return;
+            }
+          } else if (value && typeof value === 'object') {
+            if (value.type === 'url') {
+              // Уже загружено - сохраняем URL
+              dataToSave[fieldKey] = value.value;
+            } else if (value.type === 'file' && value.value) {
+              // Нужно загрузить файл
+              try {
+                const uploadedUrl = await uploadFileAndGetUrl(value.value);
+                dataToSave[fieldKey] = uploadedUrl;
+                // Освобождаем память от preview
+                if (value.preview) {
+                  URL.revokeObjectURL(value.preview);
+                }
+              } catch (error) {
+                console.error('Ошибка загрузки изображения:', error);
+                setInfoModal({
+                  title: 'Ошибка загрузки',
+                  message: `Не удалось загрузить изображение для поля "${field.label}".`,
+                });
+                setIsSaving(false);
+                return;
+              }
+            } else {
+              dataToSave[fieldKey] = null;
             }
           } else {
             dataToSave[fieldKey] = null;
@@ -1877,6 +1911,7 @@ export default function DynamicRecordEditPage() {
             hideAddBlockButton
             hideBlockNameField
             hideBlockControls
+            showCustomBlockHeading
           />
         </div>
         

@@ -228,6 +228,7 @@ export default function NewsBlockEditor({
   hideAddBlockButton = false,
   hideBlockNameField = false,
   hideBlockControls = false,
+  showCustomBlockHeading = false,
   preserveRelatedSelections = false,
   excludedRecordId = null,
   invalidBlockIds = [],
@@ -999,7 +1000,10 @@ export default function NewsBlockEditor({
   return (
     <div className={styles.wrapper}>
       <div className={styles.blocksList}>
-        {sortedBlocks.map((block, index) => (
+        {sortedBlocks.map((block, index) => {
+          const blockDef = BLOCK_TYPES.find((b) => b.type === block.type);
+          const customBlockHeading = (block.label && String(block.label).trim()) || blockDef?.label || block.type;
+          return (
           <div 
             key={block.id}
             ref={(el) => {
@@ -1060,10 +1064,9 @@ export default function NewsBlockEditor({
               </div>
             )}
 
-            <div className={styles.blockContent}>
+            <div className={`${styles.blockContent} ${showCustomBlockHeading ? styles.blockContentCustomHeading : ''}`}>
               {structureOnly ? (
                 (() => {
-                  const blockDef = BLOCK_TYPES.find(b => b.type === block.type);
                   const BlockIcon = blockDef?.icon;
                   return (
                     <div className={styles.structureOnlyLabel}>
@@ -1074,6 +1077,9 @@ export default function NewsBlockEditor({
                 })()
               ) : (
                 <>
+              {showCustomBlockHeading && (
+                <div className={styles.customBlockHeading}>{customBlockHeading}</div>
+              )}
               {!hideBlockNameField && (
                 <div style={{ marginBottom: 16 }}>
                   <label className={styles.blockLabel}>Название блока</label>
@@ -3451,7 +3457,8 @@ export default function NewsBlockEditor({
           </div>
           )}
           </div>
-        ))}
+        );
+        })}
         {!disableBlockInsert && sortedBlocks.length > 0 && (
           <div
             ref={(el) => {

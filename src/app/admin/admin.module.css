@@ -3351,6 +3351,16 @@
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
+.structureModalCreateToggle {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.structureModalCreateToggle .visibilityLabel {
+  font-size: 0.82rem;
+  color: #475569;
+}
+
 .structureModalListActions {
   display: flex;
   align-items: center;

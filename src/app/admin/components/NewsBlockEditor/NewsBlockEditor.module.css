@@ -224,6 +224,18 @@
   min-width: 0;
 }
 
+/* .blockContentCustomHeading {
+  padding-top: 12px;
+} */
+
+.customBlockHeading {
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
 .structureOnlyLabel {
   display: flex;
   align-items: center;

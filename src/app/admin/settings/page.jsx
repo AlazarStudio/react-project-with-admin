@@ -339,6 +339,7 @@ export default function AdminSettingsPage() {
       type: block.type,
       order: i,
       label: block.label ?? '',
+      showInCreateForm: block.showInCreateForm !== false,
     }));
 
     if (!payloadFields.some((field) => field.type === 'additionalBlocks')) {
@@ -346,6 +347,7 @@ export default function AdminSettingsPage() {
         type: 'additionalBlocks',
         order: payloadFields.length,
         label: 'additionalBlocks',
+        showInCreateForm: false,
       });
     }
 
@@ -1324,7 +1326,12 @@ export default function AdminSettingsPage() {
       const blocks = raw.map((f, i) => {
         const type = f.type && BLOCK_TYPES.some(b => b.type === f.type) ? f.type : 'text';
         const block = createEmptyBlock(type);
-        return { ...block, order: f.order ?? i, label: f.label ?? '' };
+        return {
+          ...block,
+          order: f.order ?? i,
+          label: f.label ?? '',
+          showInCreateForm: f.showInCreateForm !== false,
+        };
       });
       
       console.log('📋 Загружено блоков структуры:', blocks.length);
@@ -2449,6 +2456,20 @@ export default function AdminSettingsPage() {
                             className={styles.structureModalListInput}
                             onDragStart={(e) => e.stopPropagation()}
                           />
+                          <label className={`${styles.visibilityToggle} ${styles.structureModalCreateToggle}`}>
+                            <input
+                              type="checkbox"
+                              checked={block.showInCreateForm !== false}
+                              onChange={(e) => {
+                                const next = [...structureFields];
+                                next[idx] = { ...next[idx], showInCreateForm: e.target.checked };
+                                setStructureFields(next);
+                              }}
+                              onDragStart={(e) => e.stopPropagation()}
+                            />
+                            <span className={styles.visibilitySwitch} />
+                            <span className={styles.visibilityLabel}>Показывать в записи</span>
+                          </label>
                           <div className={styles.structureModalListActions}>
                             <button
                               type="button"
@@ -2557,7 +2578,12 @@ export default function AdminSettingsPage() {
                                     onClick={() =>
                                       setStructureFields([
                                         ...structureFields,
-                                        { ...createEmptyBlock(type), order: structureFields.length, label: '' },
+                                        {
+                                          ...createEmptyBlock(type),
+                                          order: structureFields.length,
+                                          label: '',
+                                          showInCreateForm: true,
+                                        },
                                       ])
                                     }
                                   >
