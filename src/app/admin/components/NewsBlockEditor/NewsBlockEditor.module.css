@@ -236,6 +236,10 @@
   line-height: 1.35;
 }
 
+.hideTypeBlockLabels .blockLabel {
+  display: none;
+}
+
 .structureOnlyLabel {
   display: flex;
   align-items: center;

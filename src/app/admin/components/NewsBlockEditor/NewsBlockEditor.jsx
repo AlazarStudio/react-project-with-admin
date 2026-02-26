@@ -229,6 +229,7 @@ export default function NewsBlockEditor({
   hideBlockNameField = false,
   hideBlockControls = false,
   showCustomBlockHeading = false,
+  hideTypeBlockLabels = false,
   preserveRelatedSelections = false,
   excludedRecordId = null,
   invalidBlockIds = [],
@@ -1064,7 +1065,7 @@ export default function NewsBlockEditor({
               </div>
             )}
 
-            <div className={`${styles.blockContent} ${showCustomBlockHeading ? styles.blockContentCustomHeading : ''}`}>
+            <div className={`${styles.blockContent} ${showCustomBlockHeading ? styles.blockContentCustomHeading : ''} ${hideTypeBlockLabels ? styles.hideTypeBlockLabels : ''}`}>
               {structureOnly ? (
                 (() => {
                   const BlockIcon = blockDef?.icon;

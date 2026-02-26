@@ -1961,6 +1961,7 @@ export default function DynamicRecordEditPage() {
             hideBlockNameField
             hideBlockControls
             showCustomBlockHeading
+            hideTypeBlockLabels
           />
         </div>
         
