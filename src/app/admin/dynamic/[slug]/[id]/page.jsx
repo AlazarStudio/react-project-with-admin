@@ -807,11 +807,18 @@ export default function DynamicRecordEditPage() {
       const blocksToSave = Array.isArray(additionalBlocksRef.current) ? additionalBlocksRef.current : [];
       const pendingFilesToSave = pendingFilesRef.current && typeof pendingFilesRef.current === 'object' ? pendingFilesRef.current : {};
       const publishedToSave = Boolean(isPublishedRef.current);
-      const hasPendingStructureImage = (field) => {
-        if (!field || field.type !== 'image') return false;
+      const hasPendingStructureUpload = (field) => {
+        if (!field) return false;
         const blockId = structureFieldToBlockId(field);
-        const pending = pendingFilesToSave?.[blockId]?.url;
-        return pending instanceof Blob;
+        const pending = pendingFilesToSave?.[blockId];
+        if (!pending) return false;
+        if (field.type === 'image') return pending.url instanceof Blob;
+        if (field.type === 'gallery') {
+          const pendingImages = Array.isArray(pending.images) ? pending.images : [];
+          return pendingImages.some((file) => file instanceof Blob);
+        }
+        if (field.type === 'file') return pending.documentFile instanceof Blob;
+        return false;
       };
 
       // Валидация обязательного заполнения полей структуры
@@ -819,7 +826,7 @@ export default function DynamicRecordEditPage() {
       const unfilledStructureFields = requiredStructureFields
         .filter((field) => {
           if (hasFilledValue(field.type, recordDataToSave[field.fieldKey])) return false;
-          if (hasPendingStructureImage(field)) return false;
+          if (hasPendingStructureUpload(field)) return false;
           return true;
         });
       if (unfilledStructureFields.length > 0) {
@@ -944,18 +951,60 @@ export default function DynamicRecordEditPage() {
           } else {
             dataToSave[fieldKey] = null;
           }
-        } else if (field.type === 'file' && value && typeof value === 'object' && value.type === 'file' && value.value) {
+        } else if (field.type === 'gallery') {
+          const blockId = structureFieldToBlockId(field);
+          const pendingImages = Array.isArray(pendingFilesToSave?.[blockId]?.images)
+            ? pendingFilesToSave[blockId].images
+            : [];
+          const currentImages = Array.isArray(value?.images) ? value.images : [];
+          const uploadedUrls = [];
           try {
-            const uploadedUrl = await uploadFileAndGetUrl(value.value);
-            dataToSave[fieldKey] = uploadedUrl;
+            for (const file of pendingImages) {
+              if (!(file instanceof Blob)) continue;
+              const uploadedUrl = await uploadFileAndGetUrl(file);
+              if (uploadedUrl) uploadedUrls.push(uploadedUrl);
+            }
           } catch (error) {
-            console.error('Ошибка загрузки файла:', error);
+            console.error('Ошибка загрузки изображений галереи:', error);
             setInfoModal({
               title: 'Ошибка загрузки',
-              message: `Не удалось загрузить файл для поля "${field.label}".`,
+              message: `Не удалось загрузить изображения для поля "${field.label}".`,
             });
             setIsSaving(false);
             return;
+          }
+          dataToSave[fieldKey] = normalizeFieldValueForSave(field, { images: [...currentImages, ...uploadedUrls] });
+        } else if (field.type === 'file') {
+          const blockId = structureFieldToBlockId(field);
+          const pendingDocument = pendingFilesToSave?.[blockId]?.documentFile;
+          if (pendingDocument instanceof Blob) {
+            try {
+              const uploadedUrl = await uploadFileAndGetUrl(pendingDocument);
+              dataToSave[fieldKey] = uploadedUrl;
+            } catch (error) {
+              console.error('Ошибка загрузки файла:', error);
+              setInfoModal({
+                title: 'Ошибка загрузки',
+                message: `Не удалось загрузить файл для поля "${field.label}".`,
+              });
+              setIsSaving(false);
+              return;
+            }
+          } else if (value && typeof value === 'object' && value.type === 'file' && value.value) {
+            try {
+              const uploadedUrl = await uploadFileAndGetUrl(value.value);
+              dataToSave[fieldKey] = uploadedUrl;
+            } catch (error) {
+              console.error('Ошибка загрузки файла:', error);
+              setInfoModal({
+                title: 'Ошибка загрузки',
+                message: `Не удалось загрузить файл для поля "${field.label}".`,
+              });
+              setIsSaving(false);
+              return;
+            }
+          } else {
+            dataToSave[fieldKey] = normalizeFieldValueForSave(field, value);
           }
         } else {
           dataToSave[fieldKey] = normalizeFieldValueForSave(field, value);
