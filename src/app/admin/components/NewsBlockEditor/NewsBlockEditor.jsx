@@ -223,6 +223,11 @@ export default function NewsBlockEditor({
   pendingBlockFiles = {},
   onPendingBlockFilesChange,
   structureOnly = false,
+  disableBlockRemoval = false,
+  disableBlockInsert = false,
+  hideAddBlockButton = false,
+  hideBlockNameField = false,
+  hideBlockControls = false,
   preserveRelatedSelections = false,
   excludedRecordId = null,
   invalidBlockIds = [],
@@ -1017,41 +1022,43 @@ export default function NewsBlockEditor({
               }
             }}
           >
-            <div className={styles.blockControls}>
-              <div
-                className={styles.dragHandle}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', String(index));
-                  e.dataTransfer.effectAllowed = 'move';
-                  const row = e.currentTarget.closest('[data-block-row]');
-                  if (row) e.dataTransfer.setDragImage(row, 0, 0);
-                }}
-              >
-                <GripVertical size={20} />
-              </div>
-              <div className={styles.moveButtons}>
-                <button
-                  type="button"
-                  onClick={() => moveBlock(index, -1)}
-                  disabled={index === 0}
-                  className={styles.moveBtn}
-                  aria-label="Вверх"
+            {!hideBlockControls && (
+              <div className={styles.blockControls}>
+                <div
+                  className={styles.dragHandle}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', String(index));
+                    e.dataTransfer.effectAllowed = 'move';
+                    const row = e.currentTarget.closest('[data-block-row]');
+                    if (row) e.dataTransfer.setDragImage(row, 0, 0);
+                  }}
                 >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveBlock(index, 1)}
-                  disabled={index === sortedBlocks.length - 1}
-                  className={styles.moveBtn}
-                  aria-label="Вниз"
-                >
-                  <ChevronDown size={16} />
-                </button>
+                  <GripVertical size={20} />
+                </div>
+                <div className={styles.moveButtons}>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(index, -1)}
+                    disabled={index === 0}
+                    className={styles.moveBtn}
+                    aria-label="Вверх"
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(index, 1)}
+                    disabled={index === sortedBlocks.length - 1}
+                    className={styles.moveBtn}
+                    aria-label="Вниз"
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+                <span className={styles.orderBadge}>{index + 1}</span>
               </div>
-              <span className={styles.orderBadge}>{index + 1}</span>
-            </div>
+            )}
 
             <div className={styles.blockContent}>
               {structureOnly ? (
@@ -1067,16 +1074,17 @@ export default function NewsBlockEditor({
                 })()
               ) : (
                 <>
-              {/* Поле для названия блока */}
-              <div style={{ marginBottom: 16 }}>
-                <label className={styles.blockLabel}>Название блока</label>
-                <input
-                  type="text"
-                  value={block.label ?? ''}
-                  onChange={(e) => updateBlock(index, { label: e.target.value })}
-                  className={styles.blockInput}
-                />
-              </div>
+              {!hideBlockNameField && (
+                <div style={{ marginBottom: 16 }}>
+                  <label className={styles.blockLabel}>Название блока</label>
+                  <input
+                    type="text"
+                    value={block.label ?? ''}
+                    onChange={(e) => updateBlock(index, { label: e.target.value })}
+                    className={styles.blockInput}
+                  />
+                </div>
+              )}
               
               {block.type === 'heading' && (
                 <>
@@ -3369,18 +3377,20 @@ export default function NewsBlockEditor({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => removeBlock(index)}
-              className={styles.deleteBtn}
-              title="Удалить блок"
-              aria-label="Удалить блок"
-            >
-              <X size={18} />
-            </button>
+            {!disableBlockRemoval && (
+              <button
+                type="button"
+                onClick={() => removeBlock(index)}
+                className={styles.deleteBtn}
+                title="Удалить блок"
+                aria-label="Удалить блок"
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
           
-          {index < sortedBlocks.length - 1 && (
+          {!disableBlockInsert && index < sortedBlocks.length - 1 && (
             <div
               ref={(el) => {
                 if (el) insertRefs.current[index] = el;
@@ -3442,7 +3452,7 @@ export default function NewsBlockEditor({
           )}
           </div>
         ))}
-        {sortedBlocks.length > 0 && (
+        {!disableBlockInsert && sortedBlocks.length > 0 && (
           <div
             ref={(el) => {
               if (el) insertRefs.current[sortedBlocks.length - 1] = el;
@@ -3505,7 +3515,7 @@ export default function NewsBlockEditor({
         )}
       </div>
 
-      {sortedBlocks.length === 0 && (
+      {!hideAddBlockButton && sortedBlocks.length === 0 && (
       <div className={styles.addBlockWrap} ref={addBlockRef}>
         <button
           type="button"

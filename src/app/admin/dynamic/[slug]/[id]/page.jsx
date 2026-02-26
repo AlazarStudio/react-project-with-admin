@@ -52,6 +52,187 @@ function buildStructureFields(raw) {
   });
 }
 
+function safeJsonParse(value, fallback = null) {
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function normalizeStructureFieldValue(type, rawValue) {
+  if (rawValue === undefined || rawValue === null) {
+    if (type === 'image') return null;
+    return createEmptyBlock(type)?.data ?? null;
+  }
+
+  if (type === 'image') {
+    if (typeof rawValue === 'string' && rawValue) return { type: 'url', value: rawValue };
+    if (rawValue && typeof rawValue === 'object' && rawValue.type === 'url') return rawValue;
+    if (rawValue && typeof rawValue === 'object' && rawValue.url) return { type: 'url', value: rawValue.url };
+    return null;
+  }
+
+  if (type === 'heading') {
+    if (typeof rawValue === 'string') return { text: rawValue };
+    if (rawValue && typeof rawValue === 'object' && typeof rawValue.text === 'string') return rawValue;
+    return { text: '' };
+  }
+
+  if (type === 'text' || type === 'quote') {
+    if (typeof rawValue === 'string') return { content: rawValue };
+    if (rawValue && typeof rawValue === 'object' && typeof rawValue.content === 'string') return rawValue;
+    return { content: '' };
+  }
+
+  if (['url', 'date', 'datetime', 'number'].includes(type)) {
+    if (rawValue && typeof rawValue === 'object' && Object.prototype.hasOwnProperty.call(rawValue, 'value')) return rawValue;
+    return { value: rawValue ?? '' };
+  }
+
+  if (type === 'boolean') {
+    if (rawValue && typeof rawValue === 'object' && Object.prototype.hasOwnProperty.call(rawValue, 'value')) return rawValue;
+    if (typeof rawValue === 'string') return { value: rawValue === 'true' };
+    return { value: Boolean(rawValue) };
+  }
+
+  if (type === 'contact') {
+    if (typeof rawValue === 'string') {
+      const parsed = safeJsonParse(rawValue, null);
+      if (parsed && typeof parsed === 'object') return {
+        value: parsed.value ?? '',
+        icon: parsed.icon ?? '',
+        iconType: parsed.iconType === 'upload' ? 'upload' : 'library',
+      };
+      return { value: rawValue, icon: '', iconType: 'library' };
+    }
+    if (rawValue && typeof rawValue === 'object') {
+      return {
+        value: rawValue.value ?? '',
+        icon: rawValue.icon ?? '',
+        iconType: rawValue.iconType === 'upload' ? 'upload' : 'library',
+      };
+    }
+    return { value: '', icon: '', iconType: 'library' };
+  }
+
+  if (type === 'multiselect') {
+    if (typeof rawValue === 'string') {
+      const parsed = safeJsonParse(rawValue, null);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          values: Array.isArray(parsed.values) ? parsed.values : [],
+          linkEnabled: Boolean(parsed.linkEnabled),
+          links: Array.isArray(parsed.links) ? parsed.links : [],
+        };
+      }
+      return { values: [], linkEnabled: false, links: [] };
+    }
+    if (Array.isArray(rawValue)) return { values: rawValue, linkEnabled: false, links: [] };
+    if (rawValue && typeof rawValue === 'object') {
+      return {
+        values: Array.isArray(rawValue.values) ? rawValue.values : [],
+        linkEnabled: Boolean(rawValue.linkEnabled),
+        links: Array.isArray(rawValue.links) ? rawValue.links : [],
+      };
+    }
+    return { values: [], linkEnabled: false, links: [] };
+  }
+
+  if (type === 'gallery') {
+    if (typeof rawValue === 'string') {
+      const parsed = safeJsonParse(rawValue, null);
+      if (Array.isArray(parsed)) return { images: parsed };
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.images)) return { images: parsed.images };
+      return { images: [] };
+    }
+    if (Array.isArray(rawValue)) return { images: rawValue };
+    if (rawValue && typeof rawValue === 'object' && Array.isArray(rawValue.images)) return rawValue;
+    return { images: [] };
+  }
+
+  if (type === 'list') {
+    if (typeof rawValue === 'string') {
+      const parsed = safeJsonParse(rawValue, null);
+      if (Array.isArray(parsed)) return { items: parsed, ordered: false };
+      if (parsed && typeof parsed === 'object') {
+        return { items: Array.isArray(parsed.items) ? parsed.items : [], ordered: Boolean(parsed.ordered) };
+      }
+      return { items: [], ordered: false };
+    }
+    if (Array.isArray(rawValue)) return { items: rawValue, ordered: false };
+    if (rawValue && typeof rawValue === 'object') {
+      return { items: Array.isArray(rawValue.items) ? rawValue.items : [], ordered: Boolean(rawValue.ordered) };
+    }
+    return { items: [], ordered: false };
+  }
+
+  if (type === 'table' || type === 'accordion' || type === 'tabs' || type === 'relatedEntities') {
+    if (typeof rawValue === 'string') {
+      const parsed = safeJsonParse(rawValue, null);
+      if (parsed && typeof parsed === 'object') return parsed;
+      return createEmptyBlock(type)?.data || {};
+    }
+    if (rawValue && typeof rawValue === 'object') return rawValue;
+    return createEmptyBlock(type)?.data || {};
+  }
+
+  if (type === 'json') {
+    if (typeof rawValue === 'string') return { value: rawValue };
+    if (rawValue && typeof rawValue === 'object' && typeof rawValue.value === 'string') return rawValue;
+    return { value: JSON.stringify(rawValue ?? {}, null, 2) };
+  }
+
+  if (type === 'file') {
+    if (typeof rawValue === 'string') return { title: '', url: rawValue };
+    if (rawValue && typeof rawValue === 'object') return { title: rawValue.title || '', url: rawValue.url || '' };
+    return { title: '', url: '' };
+  }
+
+  if (type === 'video' || type === 'audio') {
+    if (typeof rawValue === 'string') return { url: rawValue };
+    if (rawValue && typeof rawValue === 'object') return { url: rawValue.url || '' };
+    return { url: '' };
+  }
+
+  if (typeof rawValue === 'object') return rawValue;
+  return rawValue;
+}
+
+function toEditorBlockData(type, value) {
+  const normalized = normalizeStructureFieldValue(type, value);
+  const emptyData = createEmptyBlock(type)?.data || {};
+
+  if (type === 'image') return { url: normalized?.value || normalized?.url || '' };
+  if (type === 'gallery') return { images: Array.isArray(normalized?.images) ? normalized.images : [] };
+  if (type === 'file') return { title: normalized?.title || '', url: normalized?.url || '' };
+  if (type === 'video' || type === 'audio') return { url: normalized?.url || '' };
+  if (type === 'heading') return { text: normalized?.text || '' };
+  if (type === 'text' || type === 'quote') return { content: normalized?.content || '' };
+
+  return normalized && typeof normalized === 'object'
+    ? { ...emptyData, ...normalized }
+    : emptyData;
+}
+
+function fromEditorBlockData(type, data) {
+  if (type === 'image') {
+    const url = typeof data?.url === 'string' ? data.url : '';
+    return url ? { type: 'url', value: url } : null;
+  }
+  if (type === 'gallery') return { images: Array.isArray(data?.images) ? data.images : [] };
+  if (type === 'file') return { title: data?.title || '', url: data?.url || '' };
+  if (type === 'video' || type === 'audio') return { url: data?.url || '' };
+  if (type === 'heading') return { text: data?.text || '' };
+  if (type === 'text' || type === 'quote') return { content: data?.content || '' };
+  return data && typeof data === 'object' ? data : {};
+}
+
+function structureFieldToBlockId(field) {
+  return `structure-${field.fieldKey}`;
+}
+
 export default function DynamicRecordEditPage() {
   const { slug, id } = useParams();
   const navigate = useNavigate();
@@ -211,20 +392,7 @@ export default function DynamicRecordEditPage() {
               fieldValue = block.data || '';
             }
             
-            // Нормализуем формат для типа image: преобразуем в формат { type: 'url', value: ... }
-            if (field.type === 'image') {
-              if (typeof fieldValue === 'string' && fieldValue) {
-                convertedData[fieldKey] = { type: 'url', value: fieldValue };
-              } else if (fieldValue && typeof fieldValue === 'object' && fieldValue.url) {
-                convertedData[fieldKey] = { type: 'url', value: fieldValue.url };
-              } else if (fieldValue && typeof fieldValue === 'object' && fieldValue.type === 'url') {
-                convertedData[fieldKey] = fieldValue;
-              } else {
-                convertedData[fieldKey] = null;
-              }
-            } else {
-              convertedData[fieldKey] = fieldValue;
-            }
+            convertedData[fieldKey] = normalizeStructureFieldValue(field.type, fieldValue);
           });
           setRecordData(convertedData);
           setIsPublished(data.isPublished !== undefined ? data.isPublished : true);
@@ -288,6 +456,29 @@ export default function DynamicRecordEditPage() {
     }));
     setInvalidStructureFieldKeys((prev) => prev.filter((key) => key !== fieldType));
     setPulseStructureFieldKeys((prev) => prev.filter((key) => key !== fieldType));
+  };
+
+  const structureBlocks = structureFields.map((field, index) => ({
+    id: structureFieldToBlockId(field),
+    type: field.type,
+    order: index,
+    label: getBlockLabel(field),
+    data: toEditorBlockData(field.type, recordData[field.fieldKey]),
+  }));
+
+  const handleStructureBlocksChange = (blocks) => {
+    const byId = new Map((Array.isArray(blocks) ? blocks : []).map((block) => [block.id, block]));
+    const nextRecordData = {};
+    structureFields.forEach((field) => {
+      const blockId = structureFieldToBlockId(field);
+      const block = byId.get(blockId);
+      const blockData = block?.data ?? createEmptyBlock(field.type)?.data ?? {};
+      nextRecordData[field.fieldKey] = fromEditorBlockData(field.type, blockData);
+    });
+
+    setRecordData((prev) => ({ ...prev, ...nextRecordData }));
+    setInvalidStructureFieldKeys([]);
+    setPulseStructureFieldKeys([]);
   };
 
   const normalizeEditorBlocks = (blocks) => {
@@ -1669,7 +1860,25 @@ export default function DynamicRecordEditPage() {
       </div>
 
       <div className={styles.formContainer}>
-        {structureFields.map(field => renderField(field))}
+        {false && structureFields.map(field => renderField(field))}
+        <div className={styles.formField}>
+          <label className={styles.blockLabel}>Поля структуры</label>
+          <NewsBlockEditor
+            blocks={structureBlocks}
+            onChange={handleStructureBlocksChange}
+            pendingBlockFiles={pendingFiles}
+            onPendingBlockFilesChange={handlePendingBlockFilesChange}
+            preserveRelatedSelections={!isNew}
+            excludedRecordId={!isNew ? id : null}
+            invalidBlockIds={invalidStructureFieldKeys.map((key) => `structure-${key}`)}
+            pulseInvalidBlockIds={pulseStructureFieldKeys.map((key) => `structure-${key}`)}
+            disableBlockRemoval
+            disableBlockInsert
+            hideAddBlockButton
+            hideBlockNameField
+            hideBlockControls
+          />
+        </div>
         
         <div className={styles.formField} style={{ marginTop: 32 }}>
           <label className={styles.blockLabel}>Дополнительные блоки</label>
