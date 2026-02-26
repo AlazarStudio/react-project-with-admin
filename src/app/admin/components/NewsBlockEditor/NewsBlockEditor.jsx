@@ -1094,7 +1094,7 @@ export default function NewsBlockEditor({
               
               {block.type === 'heading' && (
                 <>
-                  <label className={styles.blockLabel}>Заголовок (якорь для навигации)</label>
+                  <label className={styles.blockLabel}>Заголовок</label>
                   <input
                     type="text"
                     value={block.data?.text ?? ''}
